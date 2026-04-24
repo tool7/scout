@@ -1,0 +1,16 @@
+{
+  "dataDir": "~/.readcube-scout/data",
+  "jira": {
+    "host": "https://readcube.atlassian.net",
+    "email": "you@readcube.com",
+    "apiToken": "REPLACE_WITH_JIRA_API_TOKEN"
+  },
+  "projects": [
+    {
+      "name": "Papers",
+      "gitPath": "~/dev/papers",
+      "jiraProjectKey": "PAP",
+      "gitRemote": "origin"
+    }
+  ]
+}

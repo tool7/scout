@@ -1,0 +1,37 @@
+{
+  "name": "readcube-scout",
+  "version": "0.1.0",
+  "description": "Local CLI that indexes Git history and Jira tickets for the ReadCube team into a searchable SQLite knowledge base",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "bin": {
+    "readcube-scout": "dist/query/index.js",
+    "readcube-scout-sync": "dist/sync/index.js"
+  },
+  "files": [
+    "dist",
+    "readcube-scout.config.example.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc && mkdir -p dist/db/migrations && cp src/db/migrations/*.sql dist/db/migrations/",
+    "typecheck": "tsc --noEmit",
+    "sync": "tsx src/sync/index.ts",
+    "query": "tsx src/query/index.ts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "axios": "1.7.7",
+    "better-sqlite3": "11.5.0",
+    "commander": "12.1.0",
+    "cosmiconfig": "9.0.0",
+    "simple-git": "3.27.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.11",
+    "@types/node": "22.9.0",
+    "tsx": "4.19.2",
+    "typescript": "5.6.3"
+  }
+}

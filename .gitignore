@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.claude/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+readcube-scout.config.json
+.readcube-scout.json
+.env
+.env.*
