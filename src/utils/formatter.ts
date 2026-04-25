@@ -1,4 +1,4 @@
-import type { CommitRow, TicketRow } from '../db/queries.js'
+import type { CommitRow, FileRow, TicketRow } from '../db/queries.js'
 
 const MAX_BODY_CHARS = 400
 const MAX_DESCRIPTION_CHARS = 400
@@ -86,4 +86,12 @@ export function formatTicket (ticket: TicketRow, includeComments: boolean): stri
     : 'Comments:'
 
   return `${header}\n${summary}${descriptionLine}\n${commentsHeader}\n${commentLines}`
+}
+
+export function formatFile (file: FileRow): string {
+  const lang = file.language != null && file.language.length > 0
+    ? ` · ${file.language}`
+    : ''
+  const header = `[code · ${file.project}${lang}] ${file.path}`
+  return `${header}\n${file.snippet.trim()}`
 }

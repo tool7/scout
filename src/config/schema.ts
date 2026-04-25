@@ -4,7 +4,9 @@ const projectSchema = z.object({
   name: z.string().min(1, 'project name is required'),
   gitPath: z.string().min(1, 'gitPath is required'),
   jiraProjectKey: z.string().min(1, 'jiraProjectKey is required'),
-  gitRemote: z.string().min(1).default('origin')
+  gitRemote: z.string().min(1).default('origin'),
+  indexRef: z.string().min(1).optional(),
+  excludePaths: z.array(z.string().min(1)).default([])
 })
 
 const jiraSchema = z.object({

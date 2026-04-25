@@ -22,17 +22,18 @@ export interface GitSyncResult {
   commitCount: number
 }
 
-export async function syncGitProject (
-  db: Database.Database,
-  project: ProjectConfig
-): Promise<GitSyncResult> {
+export async function gitFetchOnce (
+  project: ProjectConfig,
+  fetchedSet: Set<string>
+): Promise<SimpleGit> {
   if (!existsSync(project.gitPath)) {
     throw new Error(
       `gitPath "${project.gitPath}" does not exist for project "${project.name}"`
     )
   }
-
   const git = simpleGit(project.gitPath)
+  const key = `${project.name}::${project.gitRemote}`
+  if (fetchedSet.has(key)) return git
 
   logger.info(`[${project.name}] fetching ${project.gitRemote}`)
   try {
@@ -42,6 +43,16 @@ export async function syncGitProject (
       `git fetch failed for project "${project.name}": ${(err as Error).message}`
     )
   }
+  fetchedSet.add(key)
+  return git
+}
+
+export async function syncGitProject (
+  db: Database.Database,
+  project: ProjectConfig,
+  fetchedSet: Set<string>
+): Promise<GitSyncResult> {
+  const git = await gitFetchOnce(project, fetchedSet)
 
   logger.info(`[${project.name}] reading commit history`)
   const commits = await readCommits(git)

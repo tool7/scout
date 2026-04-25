@@ -1,6 +1,6 @@
 # readcube-scout
 
-A local CLI that gives ReadCube developers and QA engineers a conversational interface into the team's collective domain knowledge. It indexes **Git history** and **Jira tickets** across a configurable set of projects into a local SQLite database, and exposes them as three read-only query commands — nothing leaves your machine.
+A local CLI that gives ReadCube developers and QA engineers a conversational interface into the team's collective domain knowledge. It indexes **Git history**, **Jira tickets**, and **source code** across a configurable set of projects into a local SQLite database, and exposes them as three read-only query commands — nothing leaves your machine.
 
 **Primary use cases:**
 
@@ -89,6 +89,8 @@ The first three filenames are gitignored by default.
 - `projects[].gitPath` — path to a locally checked-out clone. Supports `~`.
 - `projects[].jiraProjectKey` — the Jira project key scoping ticket fetches (e.g. `PAP`, `WEB`)
 - `projects[].gitRemote` — remote to `git fetch` before indexing. Defaults to `origin`.
+- `projects[].indexRef` — *(optional)* Git ref to index source code from. Defaults to the result of `git symbolic-ref --short refs/remotes/origin/HEAD` (i.e. the configured default branch — typically `origin/master` or `origin/main`). Set explicitly only if your project ships from a non-default branch.
+- `projects[].excludePaths` — *(optional)* array of `gitignore`-style globs matched against repo-relative paths during code sync. Empty by default. Globs are evaluated by [picomatch](https://github.com/micromatch/picomatch); leading `/` is not significant.
 
 On startup the config is validated against a Zod schema; any errors are printed with the offending path (e.g. `projects.0.gitPath: gitPath is required`).
 
@@ -107,12 +109,12 @@ readcube-scout-sync status     # confirm counts and last-synced timestamps per p
 
 ### `readcube-scout search <query>` — broad keyword lookup
 
-Full-text search across all indexed Git commits and Jira tickets.
+Full-text search across all indexed Git commits, Jira tickets, and source-code files.
 
 | Flag                    | Default | Description                                  |
 | ----------------------- | ------- | -------------------------------------------- |
 | `-p, --project <name>`  | —       | Restrict to a single configured project      |
-| `-s, --source <source>` | `all`   | Which source to search: `git`, `jira`, `all` |
+| `-s, --source <source>` | `all`   | Which source to search: `git`, `jira`, `code`, `all` |
 | `-l, --limit <n>`       | 20      | Max results (1–50)                           |
 
 ### `readcube-scout history <topic>` — chronological narrative
@@ -140,7 +142,8 @@ Jira tickets most similar to a bug / behaviour description.
 ```sh
 readcube-scout-sync                         # sync everything
 readcube-scout-sync -p Papers -s git        # one project, one source
-readcube-scout-sync --full                  # force full Jira re-fetch
+readcube-scout-sync -s code                 # only refresh source-code indexes
+readcube-scout-sync --full                  # force full Jira/code re-fetch
 readcube-scout-sync status                  # show last-synced times + record counts
 ```
 
@@ -161,12 +164,23 @@ Git sync indexes **commit metadata only** — subjects, bodies, author, date, ch
 4. Upserts into the `tickets` table and rebuilds the `tickets_fts` index
 5. Records a timestamp and ticket count in `sync_state`
 
+**What Code sync does:**
+
+1. `git fetch <remote>` (deduplicated with the commit sync — runs at most once per project per `--source all`)
+2. Resolves the indexed ref: `projects[].indexRef` if set, otherwise `git symbolic-ref --short refs/remotes/origin/HEAD`
+3. `git ls-tree -r --long <ref>` lists every tracked path with its blob hash and size
+4. Diffs that against `files` for the same project, only fetching blobs (`git cat-file -p <hash>`) for new or changed paths
+5. Filters out paths matching `excludePaths`, the built-in lockfile / source-map / minified-bundle denylist, files larger than 1 MiB, and bytes that don't decode as valid UTF-8
+6. Upserts survivors into `files`; SQLite triggers keep the trigram-tokenized `files_fts` index in sync
+7. Records a timestamp and file count in `sync_state`
+
+Code sync indexes **file contents** as committed at the configured ref. It does not see uncommitted local changes or alternate branches.
+
 ## Data & privacy
 
 - The SQLite database lives at `<dataDir>/knowledge.db`. It is gitignored by default.
 - Jira API tokens live only in your config file, which is gitignored by default.
 - The query CLI never makes network calls. Only the sync CLI talks to Jira / your Git remotes.
-- Consider excluding `<dataDir>` from iCloud, Dropbox, and other cloud sync — it mirrors internal codebase and Jira data.
 
 ## Repository layout
 

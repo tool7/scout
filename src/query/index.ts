@@ -4,19 +4,20 @@ import { resolve } from 'node:path'
 import type Database from 'better-sqlite3'
 import { loadConfig } from '../config/loader.js'
 import { openDatabase } from '../db/client.js'
-import { searchCommits, searchTickets, type CommitRow, type TicketRow } from '../db/queries.js'
+import { searchCommits, searchFiles, searchTickets, type CommitRow, type FileRow, type TicketRow } from '../db/queries.js'
 import { toFtsQuery } from '../utils/fts.js'
-import { formatCommit, formatTicket } from '../utils/formatter.js'
+import { formatCommit, formatFile, formatTicket } from '../utils/formatter.js'
 import { logger } from '../utils/logger.js'
 
-type SourceFilter = 'git' | 'jira' | 'all'
+type SourceFilter = 'git' | 'jira' | 'code' | 'all'
 type StatusFilter = 'open' | 'resolved' | 'all'
 
 interface RankedEntry {
-  kind: 'commit' | 'ticket'
+  kind: 'commit' | 'ticket' | 'file'
   rank: number
   commit?: CommitRow
   ticket?: TicketRow
+  file?: FileRow
 }
 
 interface TimelineEvent {
@@ -68,8 +69,10 @@ interface SearchOptions {
 }
 
 async function runSearch (query: string, options: SearchOptions): Promise<void> {
-  const ftsQuery = toFtsQuery(query)
-  if (ftsQuery.length === 0) {
+  const naturalQuery = toFtsQuery(query, 'natural')
+  const codeQuery = toFtsQuery(query, 'code')
+
+  if (naturalQuery.length === 0 && codeQuery.length === 0) {
     emptyQueryExit(query)
     return
   }
@@ -77,16 +80,21 @@ async function runSearch (query: string, options: SearchOptions): Promise<void> 
   const { db } = await openContext()
   try {
     const { source, limit, project } = options
-    const commits = source === 'jira'
+
+    const commits = (source === 'jira' || source === 'code') || naturalQuery.length === 0
       ? []
-      : searchCommits(db, ftsQuery, { project, limit })
-    const tickets = source === 'git'
+      : searchCommits(db, naturalQuery, { project, limit })
+    const tickets = (source === 'git' || source === 'code') || naturalQuery.length === 0
       ? []
-      : searchTickets(db, ftsQuery, { project, limit, status: 'all' })
+      : searchTickets(db, naturalQuery, { project, limit, status: 'all' })
+    const files = (source === 'git' || source === 'jira') || codeQuery.length === 0
+      ? []
+      : searchFiles(db, codeQuery, { project, limit })
 
     const entries: RankedEntry[] = [
       ...commits.map((row): RankedEntry => ({ kind: 'commit', rank: row.rank, commit: row })),
-      ...tickets.map((row): RankedEntry => ({ kind: 'ticket', rank: row.rank, ticket: row }))
+      ...tickets.map((row): RankedEntry => ({ kind: 'ticket', rank: row.rank, ticket: row })),
+      ...files.map((row): RankedEntry => ({ kind: 'file', rank: row.rank, file: row }))
     ]
 
     entries.sort((a, b) => a.rank - b.rank)
@@ -104,9 +112,11 @@ async function runSearch (query: string, options: SearchOptions): Promise<void> 
     const items = top.map((entry, index) => {
       const body = entry.kind === 'commit' && entry.commit !== undefined
         ? formatCommit(entry.commit)
-        : entry.ticket !== undefined
+        : entry.kind === 'ticket' && entry.ticket !== undefined
           ? formatTicket(entry.ticket, false)
-          : ''
+          : entry.kind === 'file' && entry.file !== undefined
+            ? formatFile(entry.file)
+            : ''
       return `${index + 1}. ${body}`
     })
 
@@ -223,8 +233,8 @@ program
   .option('-p, --project <name>', 'Only search within one project')
   .option(
     '-s, --source <source>',
-    'Which source to search: git | jira | all',
-    parseEnum('--source', ['git', 'jira', 'all'] as const),
+    'Which source to search: git | jira | code | all',
+    parseEnum('--source', ['git', 'jira', 'code', 'all'] as const),
     'all' as SourceFilter
   )
   .option(

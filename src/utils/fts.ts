@@ -1,22 +1,23 @@
 const TERM_MIN_LENGTH = 2
 
+export type FtsMode = 'natural' | 'code'
+
 // Turns a raw user query (e.g. `why does "citation engine" fail`) into a safe
 // FTS5 MATCH expression. Handles three cases in one pass:
 //   - "quoted phrases"  -> phrase match, non-word chars collapsed to spaces
-//                          (e.g. "citation engine" -> "citation engine")
 //   - bare words        -> split on non-letter/digit boundaries, drop tokens
-//                          shorter than 2 chars, append `*` for prefix match
-//                          (e.g. implementations -> implementations*)
+//                          shorter than 2 chars; in 'natural' mode each token
+//                          gets a `*` prefix-match suffix, in 'code' mode it
+//                          stays bare (the trigram tokenizer used for code FTS
+//                          doesn't support prefix queries — substring matching
+//                          is built in by construction).
 //   - punctuation, FTS5-special chars, stray quotes -> dropped silently
 //
-// All resulting terms are joined with OR so BM25 can rank by combined match
-// quality instead of requiring every token to appear (implicit AND was too
-// strict for natural-language queries). The Porter stemmer on the FTS tables
-// makes `implementations*` match `implement`, `implemented`, `implementing`.
+// Terms are joined with OR so BM25 can rank by combined match quality.
 //
 // Returns an empty string if nothing usable remains — callers should treat
 // that as "no query" and bail before hitting MATCH (which errors on empty).
-export function toFtsQuery (raw: string): string {
+export function toFtsQuery (raw: string, mode: FtsMode = 'natural'): string {
   const terms: string[] = []
   const pattern = /"([^"]+)"|([^\s"]+)/g
 
@@ -30,7 +31,9 @@ export function toFtsQuery (raw: string): string {
       if (cleaned.length > 0) terms.push(`"${cleaned}"`)
     } else if (wordRaw !== undefined) {
       for (const token of splitOnNonWord(wordRaw)) {
-        if (token.length >= TERM_MIN_LENGTH) terms.push(`${token}*`)
+        if (token.length >= TERM_MIN_LENGTH) {
+          terms.push(mode === 'code' ? token : `${token}*`)
+        }
       }
     }
   }

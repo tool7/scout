@@ -8,8 +8,9 @@ import { logger } from '../utils/logger.js'
 import { getSyncState, getTotals, type SyncStateRow } from '../db/queries.js'
 import { syncGitProject } from './git.js'
 import { syncJiraProject } from './jira.js'
+import { syncCodeProject } from './code.js'
 
-type Source = 'git' | 'jira' | 'all'
+type Source = 'git' | 'jira' | 'code' | 'all'
 
 interface SyncOptions {
   project?: string
@@ -31,8 +32,8 @@ function selectProjects (config: Config, name?: string): ProjectConfig[] {
 
 function parseSource (value: string | undefined): Source {
   const source = (value ?? 'all').toLowerCase()
-  if (source !== 'git' && source !== 'jira' && source !== 'all') {
-    throw new Error(`--source must be one of: git, jira, all (got "${value}")`)
+  if (source !== 'git' && source !== 'jira' && source !== 'code' && source !== 'all') {
+    throw new Error(`--source must be one of: git, jira, code, all (got "${value}")`)
   }
   return source
 }
@@ -44,14 +45,18 @@ async function runSync (options: SyncOptions): Promise<void> {
   const projects = selectProjects(config, options.project)
   const dbPath = resolve(config.dataDir, 'knowledge.db')
   const db = openDatabase(dbPath)
+  const fetchedSet = new Set<string>()
 
   try {
     for (const project of projects) {
       if (source === 'git' || source === 'all') {
-        await syncGitProject(db, project)
+        await syncGitProject(db, project, fetchedSet)
       }
       if (source === 'jira' || source === 'all') {
         await syncJiraProject(db, project, config.jira, { full })
+      }
+      if (source === 'code' || source === 'all') {
+        await syncCodeProject(db, project, fetchedSet, { full })
       }
     }
   } finally {
@@ -91,14 +96,16 @@ function printStatus (
 
   const rows: Array<[string, string, string, string]> = [['project', 'source', 'last synced', 'records']]
   for (const project of config.projects) {
-    for (const source of ['git', 'jira'] as const) {
+    for (const source of ['git', 'jira', 'code'] as const) {
       const state = byProject.get(project.name)?.get(source)
       const synced = state?.last_synced ?? '(never)'
       const records = state == null
         ? '-'
         : source === 'git'
           ? String(state.commit_count ?? 0)
-          : String(state.ticket_count ?? 0)
+          : source === 'jira'
+            ? String(state.ticket_count ?? 0)
+            : String(state.file_count ?? 0)
       rows.push([project.name, source, synced, records])
     }
   }
@@ -127,8 +134,8 @@ program
   .command('sync', { isDefault: true })
   .description('Run a sync across all configured projects (or a single project / source)')
   .option('-p, --project <name>', 'Only sync the named project')
-  .option('-s, --source <source>', 'Only sync a specific source: git | jira | all', 'all')
-  .option('-f, --full', 'Force a full Jira re-fetch instead of incremental (no-op for git)', false)
+  .option('-s, --source <source>', 'Only sync a specific source: git | jira | code | all', 'all')
+  .option('-f, --full', 'Force a full Jira/code re-fetch instead of incremental (no-op for git)', false)
   .action(async (options: SyncOptions) => {
     try {
       await runSync(options)

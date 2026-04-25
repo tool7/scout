@@ -10,7 +10,8 @@
       "name": "Papers",
       "gitPath": "~/dev/papers",
       "jiraProjectKey": "PAP",
-      "gitRemote": "origin"
+      "gitRemote": "origin",
+      "excludePaths": ["docs/**", "**/__fixtures__/**", "**/*.generated.ts"]
     }
   ]
 }
