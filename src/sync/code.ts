@@ -66,6 +66,16 @@ interface TreeEntry {
   path: string
 }
 
+interface PendingUpsert {
+  project: string
+  path: string
+  blob_hash: string
+  size_bytes: number
+  language: string | null
+  content: string
+  indexed_at: string
+}
+
 export interface CodeSyncResult {
   project: string
   fileCount: number
@@ -98,7 +108,6 @@ export async function syncCodeProject (
 
   let inserted = 0
   let updated = 0
-  let deleted = 0
   let skipped = 0
 
   const upsert = db.prepare(`
@@ -113,6 +122,12 @@ export async function syncCodeProject (
   `)
   const remove = db.prepare('DELETE FROM files WHERE project = ? AND path = ?')
 
+  // Phase 1 (async): walk the tree and decide what to write. We can't use
+  // db.transaction() here because better-sqlite3 transactions are
+  // synchronous-only and `fetchBlob` awaits a child process. We accumulate
+  // upsert/delete intents and flush them atomically in Phase 2.
+  const pendingUpserts: PendingUpsert[] = []
+
   for (const entry of tree) {
     const existingHash = indexed.get(entry.path)
     if (existingHash === entry.blobHash) {
@@ -124,6 +139,12 @@ export async function syncCodeProject (
       // If a previously-indexed file now matches an exclude or denylist rule,
       // we want it gone from the index. The path stays in `indexed` here so
       // the post-loop sweep removes it from the DB.
+      skipped += 1
+      continue
+    }
+
+    if (!isValidBlobHash(entry.blobHash)) {
+      logger.warn(`[${project.name}] skipping ${entry.path}: invalid blob hash "${entry.blobHash}"`)
       skipped += 1
       continue
     }
@@ -141,7 +162,7 @@ export async function syncCodeProject (
       continue
     }
 
-    upsert.run({
+    pendingUpserts.push({
       project: project.name,
       path: entry.path,
       blob_hash: entry.blobHash,
@@ -158,12 +179,18 @@ export async function syncCodeProject (
 
   // Anything still in `indexed` was either absent from the current tree, or
   // present in the tree but skipped this round (newly excluded, too big,
-  // failed to fetch, not UTF-8). Remove all of these from the DB so the
-  // index reflects what should currently be searchable.
-  for (const path of indexed.keys()) {
-    remove.run(project.name, path)
-    deleted += 1
-  }
+  // failed to fetch, not UTF-8). Schedule them for removal so the index
+  // reflects what should currently be searchable.
+  const pendingDeletes = Array.from(indexed.keys())
+  const deleted = pendingDeletes.length
+
+  // Phase 2 (sync, atomic): a single transaction so an interrupted sync
+  // either lands all writes for this project or none of them.
+  const flush = db.transaction(() => {
+    for (const row of pendingUpserts) upsert.run(row)
+    for (const path of pendingDeletes) remove.run(project.name, path)
+  })
+  flush()
 
   const totalCount = (db
     .prepare('SELECT COUNT(*) AS n FROM files WHERE project = ?')
@@ -279,6 +306,14 @@ function fetchBlob (cwd: string, blobHash: string): Promise<Buffer | null> {
       resolveFn(null)
     })
   })
+}
+
+// Defense-in-depth: only feed git-format SHA-1 (40 hex) or SHA-256 (64 hex)
+// hashes back to `git cat-file -p`. Output of `git ls-tree` should always
+// match this, but a malformed/malicious tree shouldn't get a chance to slip
+// arbitrary text into the argv slot.
+function isValidBlobHash (hash: string): boolean {
+  return /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(hash)
 }
 
 function decodeUtf8 (bytes: Buffer): string | null {

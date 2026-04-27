@@ -7,11 +7,10 @@
   },
   "projects": [
     {
-      "name": "Papers",
-      "gitPath": "~/dev/papers",
-      "jiraProjectKey": "PAP",
-      "gitRemote": "origin",
-      "excludePaths": ["docs/**", "**/__fixtures__/**", "**/*.generated.ts"]
+      "name": "Papers-WebApp",
+      "gitPath": "/Users/<username>/Projects/rcp-corp-app",
+      "jiraProjectKey": "NEWAPP",
+      "gitRemote": "origin"
     }
   ]
 }

@@ -7,5 +7,6 @@ dist/
 *.db-shm
 readcube-scout.config.json
 .readcube-scout.json
+.config/readcube-scout/
 .env
 .env.*
