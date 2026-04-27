@@ -50,13 +50,7 @@ cp readcube-scout.config.example.json ~/.readcube-scout/config.json
 # then edit it
 ```
 
-**Config discovery order.** Resolution is delegated to [cosmiconfig](https://github.com/cosmiconfig/cosmiconfig), which walks **directory by directory** from the current working directory up to the filesystem root. At each directory it tries the following names in order, and the **first match wins**:
-
-1. `readcube-scout.config.json`
-2. `.readcube-scout.json`
-3. `.config/readcube-scout/config.json`
-
-If none of those is found, the loader falls back to `~/.readcube-scout/config.json`.
+The CLI also accepts project-local configs (`readcube-scout.config.json`, `.readcube-scout.json`, or `.config/readcube-scout/config.json`) discovered via [cosmiconfig](https://github.com/cosmiconfig/cosmiconfig) by walking up from the current directory; the home-directory file is the fallback when none is found.
 
 **Example:**
 
