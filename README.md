@@ -1,6 +1,6 @@
 # readcube-scout
 
-A local CLI that gives ReadCube developers and QA engineers a conversational interface into the team's collective domain knowledge. It indexes **Git history**, **Jira tickets**, and **source code** across a configurable set of projects into a local SQLite database, and exposes them as three read-only query commands — nothing leaves your machine.
+A local CLI that gives ReadCube developers and QA engineers a conversational interface into the project(s) domain knowledge. It indexes **Git history**, **Jira tickets**, and **source code** across a configurable set of projects into a local SQLite database, and exposes them as three read-only query commands — nothing leaves your machine.
 
 **Primary use cases:**
 
@@ -11,9 +11,9 @@ A local CLI that gives ReadCube developers and QA engineers a conversational int
 ## Requirements
 
 - **Node.js 20+** (22 recommended)
-- **Git** on your `PATH` (used by `simple-git` for `fetch` and `log`)
-- A C/C++ toolchain so `better-sqlite3` can compile its native binding on first install (Xcode Command Line Tools on macOS, `build-essential` on Debian/Ubuntu)
+- **Git** on your `PATH` (used by `simple-git` for `fetch`, `log`, `ls-tree`, and `cat-file`)
 - A **Jira API token** if you want Jira data indexed ([create one](https://id.atlassian.com/manage-profile/security/api-tokens))
+- *(Only if `npm install` cannot fetch a prebuilt `better-sqlite3` binary for your platform — uncommon on macOS, mainstream Linux, and Windows with Node 20/22)* a C/C++ toolchain is required so `better-sqlite3` can compile its native binding from source: Xcode Command Line Tools on macOS, `build-essential` on Debian/Ubuntu, MSVC build tools on Windows.
 
 ## Install & build
 
@@ -50,14 +50,13 @@ cp readcube-scout.config.example.json ~/.readcube-scout/config.json
 # then edit it
 ```
 
-**Config discovery order** (first match wins):
+**Config discovery order.** Resolution is delegated to [cosmiconfig](https://github.com/cosmiconfig/cosmiconfig), which walks **directory by directory** from the current working directory up to the filesystem root. At each directory it tries the following names in order, and the **first match wins**:
 
-1. `readcube-scout.config.json` in the current directory or any ancestor directory
-2. `.readcube-scout.json` in the current directory or any ancestor directory
-3. `.config/readcube-scout/config.json` in the current directory or any ancestor directory
-4. `~/.readcube-scout/config.json` (fallback)
+1. `readcube-scout.config.json`
+2. `.readcube-scout.json`
+3. `.config/readcube-scout/config.json`
 
-The first three filenames are gitignored by default.
+If none of those is found, the loader falls back to `~/.readcube-scout/config.json`.
 
 **Example:**
 
@@ -71,9 +70,9 @@ The first three filenames are gitignored by default.
   },
   "projects": [
     {
-      "name": "Papers",
-      "gitPath": "~/dev/papers",
-      "jiraProjectKey": "PAP",
+      "name": "Papers-WebApp",
+      "gitPath": "/Users/<username>/Projects/rcp-corp-app",
+      "jiraProjectKey": "NEWAPP",
       "gitRemote": "origin"
     }
   ]
@@ -87,7 +86,7 @@ The first three filenames are gitignored by default.
 - `jira.email` / `jira.apiToken` — credentials used as HTTP Basic auth against the Jira REST API
 - `projects[].name` — a human label used in sync output and as the partition key in the database
 - `projects[].gitPath` — path to a locally checked-out clone. Supports `~`.
-- `projects[].jiraProjectKey` — the Jira project key scoping ticket fetches (e.g. `PAP`, `WEB`)
+- `projects[].jiraProjectKey` — the Jira project key scoping ticket fetches (e.g. `NEWAPP`, `DES`)
 - `projects[].gitRemote` — remote to `git fetch` before indexing. Defaults to `origin`.
 - `projects[].indexRef` — *(optional)* Git ref to index source code from. Defaults to the result of `git symbolic-ref --short refs/remotes/origin/HEAD` (i.e. the configured default branch — typically `origin/master` or `origin/main`). Set explicitly only if your project ships from a non-default branch.
 - `projects[].excludePaths` — *(optional)* array of `gitignore`-style globs matched against repo-relative paths during code sync. Empty by default. Globs are evaluated by [picomatch](https://github.com/micromatch/picomatch); leading `/` is not significant.
@@ -141,7 +140,7 @@ Jira tickets most similar to a bug / behaviour description.
 
 ```sh
 readcube-scout-sync                         # sync everything
-readcube-scout-sync -p Papers -s git        # one project, one source
+readcube-scout-sync -p Papers-WebApp -s git        # one project, one source
 readcube-scout-sync -s code                 # only refresh source-code indexes
 readcube-scout-sync --full                  # force full Jira/code re-fetch
 readcube-scout-sync status                  # show last-synced times + record counts
@@ -191,29 +190,31 @@ src/
 │   └── schema.ts                     # Zod schema for readcube-scout.config.json
 ├── db/
 │   ├── client.ts                     # SQLite connection + migrations runner
-│   ├── queries.ts                    # searchCommits / searchTickets / sync state
+│   ├── queries.ts                    # searchCommits / searchTickets / searchFiles / sync state
 │   └── migrations/
 │       ├── 001_initial.sql           # commits, tickets, sync_state, FTS5 tables
-│       └── 002_fts_porter_stemmer.sql
+│       ├── 002_fts_porter_stemmer.sql
+│       └── 003_files.sql             # files table, files_fts (trigram), file_count column
 ├── sync/
 │   ├── index.ts                      # Sync CLI entry point (readcube-scout-sync)
-│   ├── git.ts                        # Git log extraction + indexing
-│   └── jira.ts                       # Jira issues + comments + indexing
+│   ├── git.ts                        # Git fetch (shared) + commit log extraction + indexing
+│   ├── jira.ts                       # Jira issues + comments + indexing
+│   └── code.ts                       # Source-code tree walk + filter ladder + indexing
 ├── query/
 │   └── index.ts                      # Query CLI entry point (readcube-scout)
 └── utils/
     ├── adf.ts                        # Atlassian Document Format → plain text
-    ├── formatter.ts                  # Commit / ticket pretty-printers
-    ├── fts.ts                        # User query → FTS5 MATCH expression
+    ├── formatter.ts                  # Commit / ticket / file pretty-printers
+    ├── fts.ts                        # User query → FTS5 MATCH expression (natural + code modes)
     └── logger.ts                     # stderr-only logger
 ```
 
 ## Development
 
 ```sh
-npm run typecheck   # tsc --noEmit
 npm run build       # tsc + copy SQL migrations to dist/
-npm run sync        # run the sync CLI via tsx (no build step)
-npm run query       # run the query CLI via tsx (no build step)
+npm run typecheck   # tsc --noEmit
+npm run sync        # run the sync CLI via tsx
+npm run query       # run the query CLI via tsx
 npm run clean       # rm -rf dist
 ```
