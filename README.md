@@ -1,6 +1,6 @@
 # readcube-scout
 
-A local CLI that gives ReadCube developers and QA engineers a conversational interface into the project(s) domain knowledge. It indexes **Git history**, **Jira tickets**, and **source code** across a configurable set of projects into a local SQLite database, and exposes them as three read-only query commands — nothing leaves your machine.
+A local CLI that gives ReadCube developers and QA engineers a conversational interface into the project(s) domain knowledge. It indexes **Git history**, **Jira tickets**, and **source code** across a configurable set of projects into a local SQLite database, and exposes them as read-only query commands — nothing leaves your machine.
 
 **Primary use cases:**
 
@@ -10,34 +10,28 @@ A local CLI that gives ReadCube developers and QA engineers a conversational int
 
 ## Requirements
 
-- **Node.js 20+** (22 recommended)
-- **Git** on your `PATH` (used by `simple-git` for `fetch`, `log`, `ls-tree`, and `cat-file`)
+- **Go 1.22+** to build (no Go runtime needed at runtime — the result is a single static binary)
+- **Git** on your `PATH` (used for `fetch`, `log`, `ls-tree`, and `cat-file`)
 - A **Jira API token** if you want Jira data indexed ([create one](https://id.atlassian.com/manage-profile/security/api-tokens))
-- *(Only if `npm install` cannot fetch a prebuilt `better-sqlite3` binary for your platform — uncommon on macOS, mainstream Linux, and Windows with Node 20/22)* a C/C++ toolchain is required so `better-sqlite3` can compile its native binding from source: Xcode Command Line Tools on macOS, `build-essential` on Debian/Ubuntu, MSVC build tools on Windows.
+
+The SQLite driver is pure Go (`modernc.org/sqlite`), so no C/C++ toolchain is required.
 
 ## Install & build
 
 ```sh
 git clone <repo-url> readcube-scout
 cd readcube-scout
-npm install
-npm run build
+go build ./cmd/readcube-scout
 ```
 
-This produces `dist/query/index.js` (the query CLI entry point) and `dist/sync/index.js` (the sync CLI).
-
-Pick one of the following to run the CLIs from anywhere:
+This produces a single `readcube-scout` executable in the current directory. Alternatively:
 
 ```sh
-# Option A: link the package globally (installs `readcube-scout` and `readcube-scout-sync` on PATH)
-npm link
+# Install onto $GOPATH/bin (or $GOBIN if set)
+go install ./cmd/readcube-scout
 
-# Option B: run per-invocation via npx from the package directory
-npx readcube-scout <subcommand>
-npx readcube-scout-sync [options]
-
-# Option C: run per-invocation via npx from anywhere (point to this directory)
-npx --package=/path/to/readcube-scout readcube-scout <subcommand>
+# Or run without building a binary
+go run ./cmd/readcube-scout <subcommand>
 ```
 
 ## Configuration
@@ -50,7 +44,7 @@ cp readcube-scout.config.example.json ~/.readcube-scout/config.json
 # then edit it
 ```
 
-The CLI also accepts project-local configs (`readcube-scout.config.json`, `.readcube-scout.json`, or `.config/readcube-scout/config.json`) discovered via [cosmiconfig](https://github.com/cosmiconfig/cosmiconfig) by walking up from the current directory; the home-directory file is the fallback when none is found.
+The CLI also accepts project-local configs (`readcube-scout.config.json`, `.readcube-scout.json`, or `.config/readcube-scout/config.json`) discovered by walking up from the current directory; the home-directory file is the fallback when none is found.
 
 **Example:**
 
@@ -83,17 +77,17 @@ The CLI also accepts project-local configs (`readcube-scout.config.json`, `.read
 - `projects[].jiraProjectKey` — the Jira project key scoping ticket fetches (e.g. `NEWAPP`, `DES`)
 - `projects[].gitRemote` — remote to `git fetch` before indexing. Defaults to `origin`.
 - `projects[].indexRef` — *(optional)* Git ref to index source code from. Defaults to the result of `git symbolic-ref --short refs/remotes/origin/HEAD` (i.e. the configured default branch — typically `origin/master` or `origin/main`). Set explicitly only if your project ships from a non-default branch.
-- `projects[].excludePaths` — *(optional)* array of `gitignore`-style globs matched against repo-relative paths during code sync. Empty by default. Globs are evaluated by [picomatch](https://github.com/micromatch/picomatch); leading `/` is not significant.
+- `projects[].excludePaths` — *(optional)* array of `gitignore`-style globs matched against repo-relative paths during code sync. Empty by default. Globs are evaluated by [doublestar](https://github.com/bmatcuk/doublestar); leading `/` is not significant.
 
-On startup the config is validated against a Zod schema; any errors are printed with the offending path (e.g. `projects.0.gitPath: gitPath is required`).
+On startup the config is validated; any errors are printed with the offending path (e.g. `projects.0.gitPath: gitPath is required`).
 
 ## First sync
 
-Populate the local database by running the sync CLI at least once:
+Populate the local database by running the sync subcommand at least once:
 
 ```sh
-readcube-scout-sync            # full fetch on first run
-readcube-scout-sync status     # confirm counts and last-synced timestamps per project/source
+readcube-scout sync            # full fetch on first run
+readcube-scout status          # confirm counts and last-synced timestamps per project/source
 ```
 
 **Optional shortcut** — if you already have an indexed `knowledge.db` from a prior ReadCube indexing tool, the on-disk schema is byte-compatible. You can copy that file into `~/.readcube-scout/data/knowledge.db` instead of re-syncing from scratch.
@@ -130,14 +124,27 @@ Jira tickets most similar to a bug / behaviour description.
 | `-s, --status <bucket>` | `all`   | `open`, `resolved`, or `all`                      |
 | `-l, --limit <n>`       | 10      | Max results (1–30)                                |
 
-### `readcube-scout-sync [options]` — index refresh
+### `readcube-scout sync [options]` — index refresh
 
 ```sh
-readcube-scout-sync                         # sync everything
-readcube-scout-sync -p Papers-WebApp -s git        # one project, one source
-readcube-scout-sync -s code                 # only refresh source-code indexes
-readcube-scout-sync --full                  # force full Jira/code re-fetch
-readcube-scout-sync status                  # show last-synced times + record counts
+readcube-scout sync                          # sync everything
+readcube-scout sync -p Papers-WebApp -s git  # one project, one source
+readcube-scout sync -s code                  # only refresh source-code indexes
+readcube-scout sync --full                   # force full Jira/code re-fetch
+```
+
+| Flag                    | Default | Description                                       |
+| ----------------------- | ------- | ------------------------------------------------- |
+| `-p, --project <name>`  | —       | Only sync the named project                       |
+| `-s, --source <source>` | `all`   | Only sync a specific source: `git`, `jira`, `code`, `all` |
+| `-f, --full`            | false   | Force a full Jira/code re-fetch (no-op for git)   |
+
+### `readcube-scout status` — sync state
+
+Show last sync time and record counts per project / source.
+
+```sh
+readcube-scout status
 ```
 
 **What Git sync does:**
@@ -173,42 +180,41 @@ Code sync indexes **file contents** as committed at the configured ref. It does 
 
 - The SQLite database lives at `<dataDir>/knowledge.db`. It is gitignored by default.
 - Jira API tokens live only in your config file, which is gitignored by default.
-- The query CLI never makes network calls. Only the sync CLI talks to Jira / your Git remotes.
+- The query subcommands (`search`, `history`, `related`, `status`) never make network calls. Only `sync` talks to Jira / your Git remotes.
 
 ## Repository layout
 
 ```
-src/
-├── config/
-│   ├── loader.ts                     # Config file discovery + validation
-│   └── schema.ts                     # Zod schema for readcube-scout.config.json
+cmd/
+└── readcube-scout/
+    └── main.go                      # single binary entry point
+internal/
+├── cli/                             # Cobra root + sub-commands (search, history, related, sync, status)
+├── config/                          # config discovery, validation, ~/relative path resolution
 ├── db/
-│   ├── client.ts                     # SQLite connection + migrations runner
-│   ├── queries.ts                    # searchCommits / searchTickets / searchFiles / sync state
+│   ├── client.go                    # SQLite open + migrations runner (modernc.org/sqlite)
+│   ├── queries.go                   # SearchCommits / SearchTickets / SearchFiles / sync state
 │   └── migrations/
-│       ├── 001_initial.sql           # commits, tickets, sync_state, FTS5 tables
+│       ├── 001_initial.sql          # commits, tickets, sync_state, FTS5 tables
 │       ├── 002_fts_porter_stemmer.sql
-│       └── 003_files.sql             # files table, files_fts (trigram), file_count column
+│       └── 003_files.sql            # files table, files_fts (trigram), file_count column
 ├── sync/
-│   ├── index.ts                      # Sync CLI entry point (readcube-scout-sync)
-│   ├── git.ts                        # Git fetch (shared) + commit log extraction + indexing
-│   ├── jira.ts                       # Jira issues + comments + indexing
-│   └── code.ts                       # Source-code tree walk + filter ladder + indexing
-├── query/
-│   └── index.ts                      # Query CLI entry point (readcube-scout)
-└── utils/
-    ├── adf.ts                        # Atlassian Document Format → plain text
-    ├── formatter.ts                  # Commit / ticket / file pretty-printers
-    ├── fts.ts                        # User query → FTS5 MATCH expression (natural + code modes)
-    └── logger.ts                     # stderr-only logger
+│   ├── git.go                       # Git fetch (shared) + commit log extraction + indexing
+│   ├── jira.go                      # Jira issues + comments + indexing
+│   └── code.go                      # Source-code tree walk + filter ladder + indexing
+├── adf/                             # Atlassian Document Format → plain text
+├── format/                          # Commit / ticket / file pretty-printers
+├── fts/                             # User query → FTS5 MATCH expression (natural + code modes)
+└── logger/                          # stderr-only logger
 ```
 
 ## Development
 
 ```sh
-npm run build       # tsc + copy SQL migrations to dist/
-npm run typecheck   # tsc --noEmit
-npm run sync        # run the sync CLI via tsx
-npm run query       # run the query CLI via tsx
-npm run clean       # rm -rf dist
+go build ./cmd/readcube-scout       # build the binary
+go run ./cmd/readcube-scout sync    # run sync without installing
+go run ./cmd/readcube-scout search "..."
+go vet ./...                        # static analysis
+go fmt ./...                        # format
+go test ./...                       # run tests (none yet — placeholder for future contributors)
 ```
