@@ -2,6 +2,7 @@ package cli
 
 import (
 	"database/sql"
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,14 +16,30 @@ import (
 
 const Version = "0.1.0"
 
+//go:embed instructions.md
+var instructionsContent string
+
 func NewRootCmd() *cobra.Command {
+	var showInstructions bool
+
 	root := &cobra.Command{
 		Use:           "readcube-scout",
 		Short:         "Query and sync the local ReadCube Scout knowledge base (Git commits, Jira tickets, source code)",
+		Long:          "Query and sync the local ReadCube Scout knowledge base (Git commits, Jira tickets, source code).\n\nRun `readcube-scout --instructions` for the full usage reference, suitable for both humans and AI agents.",
 		Version:       Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		Args:          cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if showInstructions {
+				fmt.Fprint(os.Stdout, instructionsContent)
+				return nil
+			}
+			return cmd.Help()
+		},
 	}
+
+	root.Flags().BoolVar(&showInstructions, "instructions", false, "Print the full CLI usage reference (humans + AI agents) and exit")
 
 	root.AddCommand(newSearchCmd())
 	root.AddCommand(newHistoryCmd())
