@@ -14,19 +14,17 @@ import (
 	"scout/internal/logger"
 )
 
-const Version = "0.1.0"
-
 //go:embed instructions.md
 var instructionsContent string
 
-func NewRootCmd() *cobra.Command {
+func NewRootCmd(version, commit, date string) *cobra.Command {
 	var showInstructions bool
 
 	root := &cobra.Command{
 		Use:           "scout",
 		Short:         "Query and sync your local Scout knowledge base (Git commits, Jira tickets, source code)",
 		Long:          "Query and sync your local Scout knowledge base (Git commits, Jira tickets, source code).\n\nRun `scout --instructions` for the full usage reference, suitable for both humans and AI agents.",
-		Version:       Version,
+		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.NoArgs,
@@ -38,6 +36,8 @@ func NewRootCmd() *cobra.Command {
 			return cmd.Help()
 		},
 	}
+
+	root.SetVersionTemplate(fmt.Sprintf("scout %s\ncommit: %s\nbuilt:  %s\n", version, commit, date))
 
 	root.Flags().BoolVar(&showInstructions, "instructions", false, "Print the full CLI usage reference (humans + AI agents) and exit")
 
@@ -56,8 +56,8 @@ func (silentError) Error() string { return "" }
 
 var errSilent = silentError{}
 
-func Execute() int {
-	root := NewRootCmd()
+func Execute(version, commit, date string) int {
+	root := NewRootCmd(version, commit, date)
 	if err := root.Execute(); err != nil {
 		if _, ok := err.(silentError); !ok {
 			logger.Error(err.Error())

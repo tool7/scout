@@ -10,24 +10,54 @@ A local CLI that gives developers and QA engineers a conversational interface in
 
 ## Requirements
 
-- **Go 1.22+** to build (no Go runtime needed at runtime — the result is a single static binary)
 - **Git** on your `PATH` (used for `fetch`, `log`, `ls-tree`, and `cat-file`)
 - A **Jira API token** if you want Jira data indexed ([create one](https://id.atlassian.com/manage-profile/security/api-tokens))
+- **Go 1.22+** *only if building from source* (the pre-built binaries are statically linked and need no Go runtime)
 
 The SQLite driver is pure Go (`modernc.org/sqlite`), so no C/C++ toolchain is required.
 
 ## Installation
 
-### Homebrew
+Pre-built binaries for macOS, Linux, and Windows are published on the [GitHub Releases page](https://github.com/tool7/scout/releases) for every tagged version. Pick the path that matches your platform.
 
-```bash
+### macOS (Homebrew)
+
+```sh
 brew install tool7/tap/scout
 ```
 
-### Building locally
+This works on both Intel and Apple Silicon — Homebrew picks the correct binary automatically. Upgrade later with `brew upgrade scout`.
+
+### Linux
+
+Download the tarball that matches your CPU architecture, extract it, and place `scout` on your `PATH`:
 
 ```sh
-git clone <repo-url> scout
+# x86_64 (Intel/AMD)
+curl -fsSL https://github.com/tool7/scout/releases/latest/download/scout_Linux_x86_64.tar.gz | tar -xz
+sudo mv scout /usr/local/bin/
+
+# arm64 (e.g. Raspberry Pi 4+, AWS Graviton)
+curl -fsSL https://github.com/tool7/scout/releases/latest/download/scout_Linux_arm64.tar.gz | tar -xz
+sudo mv scout /usr/local/bin/
+
+scout --version
+```
+
+### Windows
+
+1. Open the [latest release](https://github.com/tool7/scout/releases/latest) page.
+2. Download the zip matching your CPU: `scout_Windows_x86_64.zip` for most machines, `scout_Windows_arm64.zip` for ARM64 devices.
+3. Extract `scout.exe` to a stable folder, e.g. `C:\Tools\scout\`.
+4. Add that folder to your `PATH`.
+5. Open a new terminal and verify with `scout --version`.
+
+### Build from source
+
+Requires Go 1.22+:
+
+```sh
+git clone https://github.com/tool7/scout.git
 cd scout
 go build ./cmd/scout
 ```
