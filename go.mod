@@ -1,4 +1,4 @@
-module github.com/readcube/readcube-scout
+module scout
 
 go 1.26.2
 

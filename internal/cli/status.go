@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/readcube/readcube-scout/internal/config"
-	"github.com/readcube/readcube-scout/internal/db"
+	"scout/internal/config"
+	"scout/internal/db"
 )
 
 func newStatusCmd() *cobra.Command {

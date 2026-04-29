@@ -1,4 +1,4 @@
-# readcube-scout — usage reference
+# scout — usage reference
 
 A local CLI that queries an indexed SQLite knowledge base of Git commits, Jira tickets, and source code from configured projects. The query sub-commands are **fully offline** — only `sync` makes network calls (to your Git remotes and Jira). Schema: SQLite + FTS5; commits/tickets use a Porter stemmer, code uses a trigram tokenizer.
 
@@ -20,7 +20,7 @@ Pick exactly **one** sub-command per invocation.
 
 ---
 
-## `readcube-scout search <query>`
+## `scout search <query>`
 
 Broad full-text search across all indexed Git commits, Jira tickets, and source-code files. Results are ranked by BM25 across all sources and merged into one list. Each line is prefixed with its source: `[commit · …]`, `[jira · …]`, or `[code · …]`.
 
@@ -37,14 +37,14 @@ Notes:
 
 Examples:
 ```sh
-readcube-scout search 'saved searches'
-readcube-scout search 'parseConfig' --source code --limit 10
-readcube-scout search '"citation engine" failure' --project Papers-WebApp
+scout search 'saved searches'
+scout search 'parseConfig' --source code --limit 10
+scout search '"citation engine" failure' --project Papers-WebApp
 ```
 
 ---
 
-## `readcube-scout history <topic>`
+## `scout history <topic>`
 
 Unified chronological timeline for a topic / feature / file (commits + tickets, **oldest first**), top-ranked events only. **Source-code files are intentionally excluded** — files don't carry per-event timestamps suitable for a timeline. Use `search --source code` for code questions.
 
@@ -56,15 +56,15 @@ Unified chronological timeline for a topic / feature / file (commits + tickets, 
 
 Examples:
 ```sh
-readcube-scout history 'PDF export'
-readcube-scout history 'highlight panel' --since 2024-01-01 --limit 50
+scout history 'PDF export'
+scout history 'highlight panel' --since 2024-01-01 --limit 50
 ```
 
 Use when: the user asks *"why does X work this way?"* or *"when was Y introduced?"*.
 
 ---
 
-## `readcube-scout related <description>`
+## `scout related <description>`
 
 Jira tickets most similar to a bug or behaviour description. **Jira-only** by design — does not search commits or code.
 
@@ -78,15 +78,15 @@ Each result includes the ticket header (key, type, status, resolution, assignee,
 
 Examples:
 ```sh
-readcube-scout related 'PDF export drops annotations'
-readcube-scout related 'login loop on Safari' --status open
+scout related 'PDF export drops annotations'
+scout related 'login loop on Safari' --status open
 ```
 
 Use when: the user reports a bug or asks whether an issue has been seen before.
 
 ---
 
-## `readcube-scout sync [options]`
+## `scout sync [options]`
 
 Refresh the local index. **Makes network calls.** `git` syncs are always full (cheap — local `git log`); `jira` syncs are incremental by default; `code` syncs are content-diffed against the previous tree.
 
@@ -98,10 +98,10 @@ Refresh the local index. **Makes network calls.** `git` syncs are always full (c
 
 Examples:
 ```sh
-readcube-scout sync                                  # everything
-readcube-scout sync -p Papers-WebApp -s git          # one project, one source
-readcube-scout sync -s code                          # only refresh code indexes
-readcube-scout sync --full                           # force full re-fetch
+scout sync                                  # everything
+scout sync -p Papers-WebApp -s git          # one project, one source
+scout sync -s code                          # only refresh code indexes
+scout sync --full                           # force full re-fetch
 ```
 
 What each source does (high level):
@@ -113,13 +113,13 @@ When `--source all`, `git fetch` is deduplicated across the git and code passes 
 
 ---
 
-## `readcube-scout status`
+## `scout status`
 
 Show last sync time and record counts per project/source. No flags. Output is a tab-aligned table with columns `project`, `source`, `last synced`, `records`, plus a totals header.
 
 Example output:
 ```
-Database:  /Users/you/.readcube-scout/data/knowledge.db
+Database:  /Users/you/.scout/data/knowledge.db
 Totals:    9555 commit(s), 1149 ticket(s)
 
 project             source  last synced               records
@@ -145,14 +145,14 @@ Use when: confirming the index is fresh before relying on a query.
 ## Prerequisites
 
 1. **Config file** at one of:
-   - `<cwd-or-ancestor>/readcube-scout.config.json`
-   - `<cwd-or-ancestor>/.readcube-scout.json`
-   - `<cwd-or-ancestor>/.config/readcube-scout/config.json`
-   - `~/.readcube-scout/config.json` (fallback)
+   - `<cwd-or-ancestor>/scout.config.json`
+   - `<cwd-or-ancestor>/.scout.json`
+   - `<cwd-or-ancestor>/.config/scout/config.json`
+   - `~/.scout/config.json` (fallback)
 
-   Required fields: `dataDir`, `jira.{host,email,apiToken}`, `projects[].{name,gitPath,jiraProjectKey}`. See `readcube-scout.config.example.json` in the repo for the full shape.
+   Required fields: `dataDir`, `jira.{host,email,apiToken}`, `projects[].{name,gitPath,jiraProjectKey}`. See `scout.config.example.json` in the repo for the full shape.
 2. **Git** on `PATH` (only needed for `sync`).
-3. **A populated `knowledge.db`** — run `readcube-scout sync` at least once after creating the config.
+3. **A populated `knowledge.db`** — run `scout sync` at least once after creating the config.
 
 ---
 
@@ -175,6 +175,6 @@ Use when: confirming the index is fresh before relying on a query.
 - Treat the CLI's stdout as the **source of truth**. Do not paraphrase, re-rank, omit, or summarise results unless the user asks.
 - On non-zero exit, surface stderr verbatim. Do not retry with a different query unless the user asks.
 - `No matches for "..."` is **exit 0** — treat as a normal empty result, not an error.
-- Do **not** read the SQLite database directly, shell out to `sqlite3`, or bypass this CLI. All reads go through `readcube-scout`.
-- Do **not** run `readcube-scout sync` unless the user explicitly asks. Stale data is the user's call to refresh.
+- Do **not** read the SQLite database directly, shell out to `sqlite3`, or bypass this CLI. All reads go through `scout`.
+- Do **not** run `scout sync` unless the user explicitly asks. Stale data is the user's call to refresh.
 - Do **not** edit the config file or `knowledge.db`. Direct the user to do it manually.

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/readcube/readcube-scout/internal/cli"
+	"scout/internal/cli"
 )
 
 func main() {

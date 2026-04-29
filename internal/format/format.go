@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/readcube/readcube-scout/internal/db"
+	"scout/internal/db"
 )
 
 const (

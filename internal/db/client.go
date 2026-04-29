@@ -12,7 +12,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/readcube/readcube-scout/internal/logger"
+	"scout/internal/logger"
 )
 
 //go:embed migrations/*.sql

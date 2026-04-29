@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/readcube/readcube-scout/internal/adf"
-	"github.com/readcube/readcube-scout/internal/config"
-	dbpkg "github.com/readcube/readcube-scout/internal/db"
-	"github.com/readcube/readcube-scout/internal/logger"
+	"scout/internal/adf"
+	"scout/internal/config"
+	dbpkg "scout/internal/db"
+	"scout/internal/logger"
 )
 
 const (

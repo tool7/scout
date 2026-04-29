@@ -1,4 +1,4 @@
-/readcube-scout
+/scout
 *.test
 *.out
 .claude/
@@ -6,8 +6,8 @@
 *.db-journal
 *.db-wal
 *.db-shm
-readcube-scout.config.json
-.readcube-scout.json
-.config/readcube-scout/
+scout.config.json
+.scout.json
+.config/scout/
 .env
 .env.*

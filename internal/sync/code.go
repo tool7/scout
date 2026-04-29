@@ -15,8 +15,8 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 
-	"github.com/readcube/readcube-scout/internal/config"
-	"github.com/readcube/readcube-scout/internal/logger"
+	"scout/internal/config"
+	"scout/internal/logger"
 )
 
 const maxFileBytes = 1 * 1024 * 1024

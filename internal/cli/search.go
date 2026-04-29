@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/readcube/readcube-scout/internal/db"
-	"github.com/readcube/readcube-scout/internal/format"
-	"github.com/readcube/readcube-scout/internal/fts"
+	"scout/internal/db"
+	"scout/internal/format"
+	"scout/internal/fts"
 )
 
 type rankedEntry struct {

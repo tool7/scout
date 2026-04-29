@@ -9,9 +9,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/readcube/readcube-scout/internal/config"
-	"github.com/readcube/readcube-scout/internal/db"
-	"github.com/readcube/readcube-scout/internal/logger"
+	"scout/internal/config"
+	"scout/internal/db"
+	"scout/internal/logger"
 )
 
 const Version = "0.1.0"
@@ -23,9 +23,9 @@ func NewRootCmd() *cobra.Command {
 	var showInstructions bool
 
 	root := &cobra.Command{
-		Use:           "readcube-scout",
-		Short:         "Query and sync the local ReadCube Scout knowledge base (Git commits, Jira tickets, source code)",
-		Long:          "Query and sync the local ReadCube Scout knowledge base (Git commits, Jira tickets, source code).\n\nRun `readcube-scout --instructions` for the full usage reference, suitable for both humans and AI agents.",
+		Use:           "scout",
+		Short:         "Query and sync your local Scout knowledge base (Git commits, Jira tickets, source code)",
+		Long:          "Query and sync your local Scout knowledge base (Git commits, Jira tickets, source code).\n\nRun `scout --instructions` for the full usage reference, suitable for both humans and AI agents.",
 		Version:       Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,

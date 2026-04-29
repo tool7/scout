@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/readcube/readcube-scout/internal/config"
-	syncpkg "github.com/readcube/readcube-scout/internal/sync"
+	"scout/internal/config"
+	syncpkg "scout/internal/sync"
 )
 
 func newSyncCmd() *cobra.Command {

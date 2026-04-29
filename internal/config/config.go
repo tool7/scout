@@ -18,7 +18,7 @@ import (
 // `project = "<key>"` clauses.
 var jiraProjectKeyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]+$`)
 
-const moduleName = "readcube-scout"
+const moduleName = "scout"
 
 type Project struct {
 	Name           string   `json:"name"`
@@ -96,8 +96,8 @@ func Load() (*Config, error) {
 
 func findConfigSource() ([]byte, string, error) {
 	searchPlaces := []string{
-		"readcube-scout.config.json",
-		".readcube-scout.json",
+		"scout.config.json",
+		".scout.json",
 		filepath.Join(".config", moduleName, "config.json"),
 	}
 
@@ -134,8 +134,8 @@ func findConfigSource() ([]byte, string, error) {
 	}
 
 	return nil, "", fmt.Errorf(
-		"Configuration not found. Create readcube-scout.config.json in the project "+
-			"or a config file at %s. See readcube-scout.config.example.json for the expected shape.",
+		"Configuration not found. Create scout.config.json in the project "+
+			"or a config file at %s. See scout.config.example.json for the expected shape.",
 		homeConfig,
 	)
 }
@@ -145,7 +145,7 @@ func homeConfigPath() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve home directory: %w", err)
 	}
-	return filepath.Join(home, ".readcube-scout", "config.json"), nil
+	return filepath.Join(home, ".scout", "config.json"), nil
 }
 
 func expandHome(path string) string {
