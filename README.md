@@ -16,7 +16,15 @@ A local CLI that gives developers and QA engineers a conversational interface in
 
 The SQLite driver is pure Go (`modernc.org/sqlite`), so no C/C++ toolchain is required.
 
-## Install & build
+## Installation
+
+### Homebrew
+
+```bash
+brew install tool7/tap/scout
+```
+
+### Building locally
 
 ```sh
 git clone <repo-url> scout
