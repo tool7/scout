@@ -11,7 +11,7 @@ A local CLI that gives developers and QA engineers a conversational interface in
 ## Requirements
 
 - **Git** on your `PATH` (used for `fetch`, `log`, `ls-tree`, and `cat-file`)
-- A **Jira API token** if you want Jira data indexed ([create one](https://id.atlassian.com/manage-profile/security/api-tokens))
+- A **web browser** for the one-time Jira login (`scout jira-login` opens the Atlassian consent screen)
 - **Go 1.22+** *only if building from source* (the pre-built binaries are statically linked and need no Go runtime)
 
 The SQLite driver is pure Go (`modernc.org/sqlite`), so no C/C++ toolchain is required.
@@ -74,7 +74,7 @@ go run ./cmd/scout <subcommand>
 
 ## Configuration
 
-Create a `scout.config.json` with your Jira credentials and the list of projects to index. A template is provided:
+Create a `scout.config.json` with your Jira host and the list of projects to index. Authentication itself is handled by `scout jira-login` (OAuth 2.0 / 3LO) and produces no credentials in this file. A template is provided:
 
 ```sh
 mkdir -p ~/.scout
@@ -90,9 +90,7 @@ The CLI also accepts project-local configs (`scout.config.json`, `.scout.json`, 
 {
   "dataDir": "~/.scout/data",
   "jira": {
-    "host": "https://your-org.atlassian.net",
-    "email": "you@example.com",
-    "apiToken": "your-jira-api-token"
+    "host": "https://your-org.atlassian.net"
   },
   "projects": [
     {
@@ -107,9 +105,8 @@ The CLI also accepts project-local configs (`scout.config.json`, `.scout.json`, 
 
 **Fields:**
 
-- `dataDir` — where the SQLite database (`knowledge.db`) is written. Created on first sync. Supports `~` expansion; relative paths resolve against the config file's directory.
-- `jira.host` — your Atlassian Cloud base URL
-- `jira.email` / `jira.apiToken` — credentials used as HTTP Basic auth against the Jira REST API
+- `dataDir` — where the SQLite database (`knowledge.db`) and the OAuth token file (`oauth_tokens.json`) are written. Created on first sync / first login. Supports `~` expansion; relative paths resolve against the config file's directory.
+- `jira.host` — your Atlassian Cloud base URL. Used to pick the right `cloudId` if your account has access to multiple Atlassian sites.
 - `projects[].name` — a human label used in sync output and as the partition key in the database
 - `projects[].gitPath` — path to a locally checked-out clone. Supports `~`.
 - `projects[].jiraProjectKey` — the Jira project key scoping ticket fetches (e.g. `EXAMPLE`, `PROJ`)
@@ -121,12 +118,15 @@ On startup the config is validated; any errors are printed with the offending pa
 
 ## First sync
 
-Populate the local database by running the sync subcommand at least once:
+Authenticate to Jira once, then populate the local database:
 
 ```sh
+scout jira-login      # opens your browser, stores OAuth tokens at <dataDir>/oauth_tokens.json
 scout sync            # full fetch on first run
 scout status          # confirm counts and last-synced timestamps per project/source
 ```
+
+`scout jira-login` runs the Atlassian OAuth 2.0 (3LO) flow: it boots a transient `http://127.0.0.1:53127/callback` listener, opens the Atlassian consent screen in your default browser, and saves the resulting tokens (access + refresh + cloudId) with `0600` permissions. Subsequent `scout sync` runs refresh the access token automatically — no further interactive logins until your refresh token is revoked or you delete the file. To forget the tokens, run `scout jira-logout`. (If port `53127` is already in use on your machine — rare, it's in the IANA private range — `scout jira-login` will report a clear bind error.)
 
 **Optional shortcut** — if you already have an indexed `knowledge.db` from a prior compatible indexing tool, the on-disk schema is byte-compatible. You can copy that file into `~/.scout/data/knowledge.db` instead of re-syncing from scratch.
 
@@ -204,7 +204,7 @@ Git sync indexes **commit metadata only** — subjects, bodies, author, date, ch
 
 **What Jira sync does:**
 
-1. Paginated `POST /rest/api/3/search/jql` with explicit `fields` for summary, description, type, status, resolution, created, updated, reporter, assignee, labels, and `comment` (inline)
+1. Paginated `POST https://api.atlassian.com/ex/jira/<cloudId>/rest/api/3/search/jql` (authenticated with the bearer access token from `scout jira-login`) with explicit `fields` for summary, description, type, status, resolution, created, updated, reporter, assignee, labels, and `comment` (inline)
 2. ADF (Atlassian Document Format) bodies on descriptions and comments are flattened to plain text for FTS indexing
 3. Upserts into the `tickets` table and rebuilds the `tickets_fts` index
 4. Records a timestamp and ticket count in `sync_state`
@@ -252,8 +252,8 @@ Quote multi-word queries with single quotes; wrap an exact phrase in `"…"` ins
 ## Data & privacy
 
 - The SQLite database lives at `<dataDir>/knowledge.db`. It is gitignored by default.
-- Jira API tokens live only in your config file, which is gitignored by default.
-- The query subcommands (`search`, `history`, `related`, `status`) never make network calls. Only `sync` talks to Jira / your Git remotes.
+- Jira OAuth tokens live at `<dataDir>/oauth_tokens.json` with `0600` permissions. They never appear in the config file or in `knowledge.db`. Run `scout jira-logout` to delete them.
+- The query subcommands (`search`, `history`, `related`, `status`) never make network calls. Only `sync` and `jira-login` talk to Atlassian / your Git remotes.
 
 ## Repository layout
 

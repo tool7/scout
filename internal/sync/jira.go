@@ -15,6 +15,7 @@ import (
 	"scout/internal/config"
 	dbpkg "scout/internal/db"
 	"scout/internal/logger"
+	"scout/internal/oauth"
 )
 
 const (
@@ -73,17 +74,18 @@ type JiraSyncOptions struct {
 type jiraClient struct {
 	httpClient *http.Client
 	baseURL    string
-	username   string
-	password   string
 }
 
-func newJiraClient(jira config.Jira) *jiraClient {
-	return &jiraClient{
-		httpClient: &http.Client{Timeout: jiraTimeout},
-		baseURL:    strings.TrimRight(jira.Host, "/") + "/rest/api/3",
-		username:   jira.Email,
-		password:   jira.APIToken,
+func newJiraClient(ctx context.Context, dataDir string) (*jiraClient, error) {
+	httpClient, cloudID, err := oauth.HTTPClient(ctx, dataDir)
+	if err != nil {
+		return nil, err
 	}
+	httpClient.Timeout = jiraTimeout
+	return &jiraClient{
+		httpClient: httpClient,
+		baseURL:    strings.TrimRight(oauth.APIBaseURL, "/") + "/" + cloudID + "/rest/api/3",
+	}, nil
 }
 
 func (c *jiraClient) doJSON(ctx context.Context, method, path string, body any, label string) ([]byte, error) {
@@ -104,7 +106,6 @@ func (c *jiraClient) doJSON(ctx context.Context, method, path string, body any, 
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	req.SetBasicAuth(c.username, c.password)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -125,8 +126,11 @@ func (c *jiraClient) doJSON(ctx context.Context, method, path string, body any, 
 	return respBody, nil
 }
 
-func SyncJiraProject(ctx context.Context, db *sql.DB, project config.Project, jira config.Jira, opts JiraSyncOptions) (JiraSyncResult, error) {
-	client := newJiraClient(jira)
+func SyncJiraProject(ctx context.Context, db *sql.DB, project config.Project, dataDir string, opts JiraSyncOptions) (JiraSyncResult, error) {
+	client, err := newJiraClient(ctx, dataDir)
+	if err != nil {
+		return JiraSyncResult{}, err
+	}
 
 	var since string
 	if !opts.Full {

@@ -15,6 +15,8 @@ This document is the authoritative usage reference. Treat it as ground truth for
 | `related`   | Jira tickets similar to a bug/behaviour description      | ✓     |        |         |
 | `sync`      | Refresh the local index from Git remotes + Jira          | ✓     | ✓      | ✓       |
 | `status`    | Show last sync time and record counts per project/source | ✓     |        |         |
+| `jira-login`  | Authenticate to Jira via OAuth 2.0 (3LO) in a browser  |       | ✓      | ✓       |
+| `jira-logout` | Forget the locally stored Jira OAuth tokens            |       | ✓      |         |
 
 Pick exactly **one** sub-command per invocation.
 
@@ -150,9 +152,10 @@ Use when: confirming the index is fresh before relying on a query.
    - `<cwd-or-ancestor>/.config/scout/config.json`
    - `~/.scout/config.json` (fallback)
 
-   Required fields: `dataDir`, `jira.{host,email,apiToken}`, `projects[].{name,gitPath,jiraProjectKey}`. See `scout.config.example.json` in the repo for the full shape.
+   Required fields: `dataDir`, `jira.host`, `projects[].{name,gitPath,jiraProjectKey}`. See `scout.config.example.json` in the repo for the full shape.
 2. **Git** on `PATH` (only needed for `sync`).
-3. **A populated `knowledge.db`** — run `scout sync` at least once after creating the config.
+3. **Jira login** — run `scout jira-login` once. This stores OAuth tokens at `<dataDir>/oauth_tokens.json`; subsequent `scout sync` runs refresh them automatically.
+4. **A populated `knowledge.db`** — run `scout sync` at least once after logging in.
 
 ---
 

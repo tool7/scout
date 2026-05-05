@@ -46,6 +46,8 @@ func NewRootCmd(version string) *cobra.Command {
 	root.AddCommand(newRelatedCmd())
 	root.AddCommand(newSyncCmd())
 	root.AddCommand(newStatusCmd())
+	root.AddCommand(newJiraLoginCmd())
+	root.AddCommand(newJiraLogoutCmd())
 
 	return root
 }

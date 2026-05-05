@@ -1,9 +1,7 @@
 {
   "dataDir": "~/.scout/data",
   "jira": {
-    "host": "https://your-org.atlassian.net",
-    "email": "you@example.com",
-    "apiToken": "REPLACE_WITH_JIRA_API_TOKEN"
+    "host": "https://your-org.atlassian.net"
   },
   "projects": [
     {

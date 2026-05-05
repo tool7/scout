@@ -5,6 +5,7 @@ go 1.26.2
 require (
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/spf13/cobra v1.10.2
+	golang.org/x/oauth2 v0.36.0
 	modernc.org/sqlite v1.50.0
 )
 

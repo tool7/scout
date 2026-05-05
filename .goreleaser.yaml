@@ -25,6 +25,8 @@ builds:
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
+      - -X scout/internal/oauth.ClientID={{.Env.SCOUT_OAUTH_CLIENT_ID}}
+      - -X scout/internal/oauth.ClientSecret={{.Env.SCOUT_OAUTH_CLIENT_SECRET}}
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:

@@ -61,7 +61,7 @@ func runSync(ctx context.Context, projectName, source string, full bool) error {
 			}
 		}
 		if source == "jira" || source == "all" {
-			if _, err := syncpkg.SyncJiraProject(ctx, rt.db, project, rt.cfg.Jira, syncpkg.JiraSyncOptions{Full: full}); err != nil {
+			if _, err := syncpkg.SyncJiraProject(ctx, rt.db, project, rt.cfg.DataDir, syncpkg.JiraSyncOptions{Full: full}); err != nil {
 				return err
 			}
 		}

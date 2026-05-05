@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/mail"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -30,9 +29,7 @@ type Project struct {
 }
 
 type Jira struct {
-	Host     string `json:"host"`
-	Email    string `json:"email"`
-	APIToken string `json:"apiToken"`
+	Host string `json:"host"`
 }
 
 type Config struct {
@@ -182,16 +179,6 @@ func validate(cfg *Config) []validationIssue {
 		issues = append(issues, validationIssue{path: "jira.host", message: "jira.host must be a valid URL"})
 	} else if u, err := url.Parse(cfg.Jira.Host); err != nil || u.Scheme == "" || u.Host == "" {
 		issues = append(issues, validationIssue{path: "jira.host", message: "jira.host must be a valid URL"})
-	}
-
-	if cfg.Jira.Email == "" {
-		issues = append(issues, validationIssue{path: "jira.email", message: "jira.email must be a valid email address"})
-	} else if _, err := mail.ParseAddress(cfg.Jira.Email); err != nil {
-		issues = append(issues, validationIssue{path: "jira.email", message: "jira.email must be a valid email address"})
-	}
-
-	if cfg.Jira.APIToken == "" {
-		issues = append(issues, validationIssue{path: "jira.apiToken", message: "jira.apiToken is required"})
 	}
 
 	if len(cfg.Projects) == 0 {
