@@ -1,0 +1,25 @@
+# Build artifacts
+/scout
+dist/
+
+# Go test & coverage output
+*.test
+*.out
+
+# SQLite databases (user data — never commit)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Local config (contains credentials)
+scout.config.json
+.scout.json
+.config/scout/
+
+# Environment files
+.env
+.env.*
+
+# Editor / tooling
+.claude/

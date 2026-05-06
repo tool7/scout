@@ -1,0 +1,14 @@
+{
+  "dataDir": "~/.scout/data",
+  "jira": {
+    "host": "https://your-org.atlassian.net"
+  },
+  "projects": [
+    {
+      "name": "ExampleProject",
+      "gitPath": "/Users/<username>/Projects/example-project",
+      "jiraProjectKey": "EXAMPLE",
+      "gitRemote": "origin"
+    }
+  ]
+}
