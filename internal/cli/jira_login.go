@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"scout/internal/config"
@@ -19,6 +21,9 @@ func newJiraLoginCmd() *cobra.Command {
 			cfg, err := config.Load()
 			if err != nil {
 				return err
+			}
+			if !cfg.Jira.Configured() {
+				return fmt.Errorf("Jira is not configured. Set jira.host in scout.config.json before running jira-login.")
 			}
 			tokens, err := oauth.Login(cmd.Context(), cfg.DataDir, cfg.Jira.Host)
 			if err != nil {

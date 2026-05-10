@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -50,6 +51,13 @@ func runRelated(description, project, status string, limit int) error {
 		return err
 	}
 	defer rt.close()
+
+	// `related` is Jira-only by design. If the user never opted into
+	// Jira, refuse explicitly rather than returning a confusing
+	// "No matches" — they'd otherwise have no clue why.
+	if !rt.cfg.Jira.Configured() {
+		return fmt.Errorf("Jira is not configured. `scout related` only searches Jira tickets; set jira.host in scout.config.json and run `scout jira-login` to enable it.")
+	}
 
 	statusFilter := db.TicketStatusAll
 	switch status {

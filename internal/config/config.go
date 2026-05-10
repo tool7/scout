@@ -32,6 +32,15 @@ type Jira struct {
 	Host string `json:"host"`
 }
 
+// Configured reports whether the user opted into Jira indexing by
+// setting jira.host. When false, scout skips Jira sync entirely,
+// `scout jira-login` refuses to run, and `scout related` errors out
+// with a setup hint. Per-project Jira sync additionally requires
+// projects[].jiraProjectKey.
+func (j Jira) Configured() bool {
+	return j.Host != ""
+}
+
 type Config struct {
 	DataDir  string    `json:"dataDir"`
 	Jira     Jira      `json:"jira"`
@@ -175,10 +184,11 @@ func validate(cfg *Config) []validationIssue {
 		issues = append(issues, validationIssue{path: "dataDir", message: "dataDir is required"})
 	}
 
-	if cfg.Jira.Host == "" {
-		issues = append(issues, validationIssue{path: "jira.host", message: "jira.host must be a valid URL"})
-	} else if u, err := url.Parse(cfg.Jira.Host); err != nil || u.Scheme == "" || u.Host == "" {
-		issues = append(issues, validationIssue{path: "jira.host", message: "jira.host must be a valid URL"})
+	// jira.host is optional. If set, it must parse as an absolute URL.
+	if cfg.Jira.Host != "" {
+		if u, err := url.Parse(cfg.Jira.Host); err != nil || u.Scheme == "" || u.Host == "" {
+			issues = append(issues, validationIssue{path: "jira.host", message: "jira.host must be a valid URL"})
+		}
 	}
 
 	if len(cfg.Projects) == 0 {
@@ -193,11 +203,22 @@ func validate(cfg *Config) []validationIssue {
 		if p.GitPath == "" {
 			issues = append(issues, validationIssue{path: base + ".gitPath", message: "gitPath is required"})
 		}
-		if !jiraProjectKeyPattern.MatchString(p.JiraProjectKey) {
-			issues = append(issues, validationIssue{
-				path:    base + ".jiraProjectKey",
-				message: "jiraProjectKey must match /^[A-Z][A-Z0-9_]+$/ (e.g. NEWAPP, DES)",
-			})
+		// jiraProjectKey is optional: if empty, this project is excluded
+		// from Jira sync. If set, it must match the standard Atlassian
+		// project-key shape, AND jira.host must also be set.
+		if p.JiraProjectKey != "" {
+			if !jiraProjectKeyPattern.MatchString(p.JiraProjectKey) {
+				issues = append(issues, validationIssue{
+					path:    base + ".jiraProjectKey",
+					message: "jiraProjectKey must match /^[A-Z][A-Z0-9_]+$/ (e.g. NEWAPP, DES)",
+				})
+			}
+			if cfg.Jira.Host == "" {
+				issues = append(issues, validationIssue{
+					path:    base + ".jiraProjectKey",
+					message: "jiraProjectKey is set but jira.host is empty; configure jira.host or remove jiraProjectKey",
+				})
+			}
 		}
 		if p.IndexRef != "" && strings.TrimSpace(p.IndexRef) == "" {
 			issues = append(issues, validationIssue{path: base + ".indexRef", message: "indexRef must not be empty"})

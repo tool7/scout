@@ -68,7 +68,7 @@ Use when: the user asks *"why does X work this way?"* or *"when was Y introduced
 
 ## `scout related <description>`
 
-Jira tickets most similar to a bug or behaviour description. **Jira-only** by design — does not search commits or code.
+Jira tickets most similar to a bug or behaviour description. **Jira-only** by design — does not search commits or code. Refuses to run if Jira isn't configured (no `jira.host` in the config); use `scout search --source code` or `scout history` for non-Jira lookups instead.
 
 | Flag                    | Default | Description                                  |
 | ----------------------- | ------- | -------------------------------------------- |
@@ -90,7 +90,7 @@ Use when: the user reports a bug or asks whether an issue has been seen before.
 
 ## `scout sync [options]`
 
-Refresh the local index. **Makes network calls.** `git` syncs are always full (cheap — local `git log`); `jira` syncs are incremental by default; `code` syncs are content-diffed against the previous tree.
+Refresh the local index. **Makes network calls.** `git` syncs are always full (cheap — local `git log`); `jira` syncs are incremental by default; `code` syncs are content-diffed against the previous tree. Jira sync is skipped automatically for any project without `jiraProjectKey`, and entirely if `jira.host` is unset; `--source jira` errors loudly in those cases.
 
 | Flag                    | Default | Description                                                      |
 | ----------------------- | ------- | ---------------------------------------------------------------- |
@@ -152,10 +152,10 @@ Use when: confirming the index is fresh before relying on a query.
    - `<cwd-or-ancestor>/.config/scout/config.json`
    - `~/.scout/config.json` (fallback)
 
-   Required fields: `dataDir`, `jira.host`, `projects[].{name,gitPath,jiraProjectKey}`. See `scout.config.example.json` in the repo for the full shape.
+   Required fields: `dataDir`, `projects[].{name,gitPath}`. Optional: the entire `jira` block (with `jira.host`) and `projects[].jiraProjectKey` — set both to enable Jira indexing, omit both for a Git/code-only setup. See `scout.config.example.json` in the repo for the full shape.
 2. **Git** on `PATH` (only needed for `sync`).
-3. **Jira login** — run `scout jira-login` once. This stores OAuth tokens at `<dataDir>/oauth_tokens.json`; subsequent `scout sync` runs refresh them automatically.
-4. **A populated `knowledge.db`** — run `scout sync` at least once after logging in.
+3. **Jira login** — only required if Jira is configured. Run `scout jira-login` once; OAuth tokens land at `<dataDir>/oauth_tokens.json` and refresh automatically on subsequent `scout sync` runs.
+4. **A populated `knowledge.db`** — run `scout sync` at least once.
 
 ---
 

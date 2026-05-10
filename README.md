@@ -11,7 +11,7 @@ A local CLI that gives developers and QA engineers a conversational interface in
 ## Requirements
 
 - **Git** on your `PATH` (used for `fetch`, `log`, `ls-tree`, and `cat-file`)
-- A **web browser** for the one-time Jira login (`scout jira-login` opens the Atlassian consent screen)
+- A **web browser** *only if you want Jira indexing* — the one-time `scout jira-login` opens the Atlassian consent screen. Jira is fully optional; scout works as a Git/code-only knowledge base if you skip it.
 - **Go 1.22+** *only if building from source* (the pre-built binaries are statically linked and need no Go runtime)
 
 The SQLite driver is pure Go (`modernc.org/sqlite`), so no C/C++ toolchain is required.
@@ -74,7 +74,7 @@ go run ./cmd/scout <subcommand>
 
 ## Configuration
 
-Create a `scout.config.json` with your Jira host and the list of projects to index. Authentication itself is handled by `scout jira-login` (OAuth 2.0 / 3LO) and produces no credentials in this file. A template is provided:
+Create a `scout.config.json` with the list of projects to index. Jira is optional — if you only want Git + source-code indexing, omit the entire `jira` block and any `jiraProjectKey` fields. A template is provided:
 
 ```sh
 mkdir -p ~/.scout
@@ -84,7 +84,7 @@ cp scout.config.example.json ~/.scout/config.json
 
 The CLI also accepts project-local configs (`scout.config.json`, `.scout.json`, or `.config/scout/config.json`) discovered by walking up from the current directory; the home-directory file is the fallback when none is found.
 
-**Example:**
+**Example (with Jira):**
 
 ```json
 {
@@ -103,13 +103,29 @@ The CLI also accepts project-local configs (`scout.config.json`, `.scout.json`, 
 }
 ```
 
+**Example (Git + code only, no Jira):**
+
+```json
+{
+  "dataDir": "~/.scout/data",
+  "projects": [
+    {
+      "name": "ExampleProject",
+      "gitPath": "/Users/<username>/Projects/example-project",
+      "gitRemote": "origin"
+    }
+  ]
+}
+```
+
 **Fields:**
 
 - `dataDir` — where the SQLite database (`knowledge.db`) and the OAuth token file (`oauth_tokens.json`) are written. Created on first sync / first login. Supports `~` expansion; relative paths resolve against the config file's directory.
+- `jira` — *(optional)* omit the whole block to disable Jira indexing.
 - `jira.host` — your Atlassian Cloud base URL. Used to pick the right `cloudId` if your account has access to multiple Atlassian sites.
 - `projects[].name` — a human label used in sync output and as the partition key in the database
 - `projects[].gitPath` — path to a locally checked-out clone. Supports `~`.
-- `projects[].jiraProjectKey` — the Jira project key scoping ticket fetches (e.g. `EXAMPLE`, `PROJ`)
+- `projects[].jiraProjectKey` — *(optional, requires `jira.host`)* the Jira project key scoping ticket fetches (e.g. `EXAMPLE`, `PROJ`). Projects without this field are skipped during Jira sync.
 - `projects[].gitRemote` — remote to `git fetch` before indexing. Defaults to `origin`.
 - `projects[].indexRef` — *(optional)* Git ref to index source code from. Defaults to the result of `git symbolic-ref --short refs/remotes/origin/HEAD` (i.e. the configured default branch — typically `origin/master` or `origin/main`). Set explicitly only if your project ships from a non-default branch.
 - `projects[].excludePaths` — *(optional)* array of `gitignore`-style globs matched against repo-relative paths during code sync. Empty by default. Globs are evaluated by [doublestar](https://github.com/bmatcuk/doublestar); leading `/` is not significant.
@@ -118,13 +134,15 @@ On startup the config is validated; any errors are printed with the offending pa
 
 ## First sync
 
-Authenticate to Jira once, then populate the local database:
+If you configured Jira, authenticate to it once. Then populate the local database:
 
 ```sh
-scout jira-login      # opens your browser, stores OAuth tokens at <dataDir>/oauth_tokens.json
+scout jira-login      # only if jira.host is set; stores OAuth tokens at <dataDir>/oauth_tokens.json
 scout sync            # full fetch on first run
 scout status          # confirm counts and last-synced timestamps per project/source
 ```
+
+`scout sync` automatically skips Jira for projects (or installs) without Jira configured, so a Git/code-only setup just works without `scout jira-login`.
 
 `scout jira-login` runs the Atlassian OAuth 2.0 (3LO) flow: it boots a transient `http://127.0.0.1:53127/callback` listener, opens the Atlassian consent screen in your default browser, and saves the resulting tokens (access + refresh + cloudId) with `0600` permissions. Subsequent `scout sync` runs refresh the access token automatically — no further interactive logins until your refresh token is revoked or you delete the file. To forget the tokens, run `scout jira-logout`. (If port `53127` is already in use on your machine — rare, it's in the IANA private range — `scout jira-login` will report a clear bind error.)
 
@@ -252,8 +270,8 @@ Quote multi-word queries with single quotes; wrap an exact phrase in `"…"` ins
 ## Data & privacy
 
 - The SQLite database lives at `<dataDir>/knowledge.db`. It is gitignored by default.
-- Jira OAuth tokens live at `<dataDir>/oauth_tokens.json` with `0600` permissions. They never appear in the config file or in `knowledge.db`. Run `scout jira-logout` to delete them.
-- The query subcommands (`search`, `history`, `related`, `status`) never make network calls. Only `sync` and `jira-login` talk to Atlassian / your Git remotes.
+- Jira OAuth tokens, if you opted into Jira, live at `<dataDir>/oauth_tokens.json` with `0600` permissions. They never appear in the config file or in `knowledge.db`. Run `scout jira-logout` to delete them.
+- The query subcommands (`search`, `history`, `related`, `status`) never make network calls. Only `sync` and `jira-login` talk to Atlassian / your Git remotes. `scout related` is Jira-only and refuses to run when Jira isn't configured.
 
 ## Repository layout
 

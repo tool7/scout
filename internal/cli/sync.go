@@ -52,6 +52,12 @@ func runSync(ctx context.Context, projectName, source string, full bool) error {
 		return err
 	}
 
+	if source == "jira" {
+		if err := requireJiraConfigured(rt.cfg, projects, projectName); err != nil {
+			return err
+		}
+	}
+
 	fetched := syncpkg.NewFetchSet()
 
 	for _, project := range projects {
@@ -60,7 +66,7 @@ func runSync(ctx context.Context, projectName, source string, full bool) error {
 				return err
 			}
 		}
-		if source == "jira" || source == "all" {
+		if (source == "jira" || source == "all") && shouldSyncJira(rt.cfg, project) {
 			if _, err := syncpkg.SyncJiraProject(ctx, rt.db, project, rt.cfg.DataDir, syncpkg.JiraSyncOptions{Full: full}); err != nil {
 				return err
 			}
@@ -73,6 +79,37 @@ func runSync(ctx context.Context, projectName, source string, full bool) error {
 	}
 
 	return nil
+}
+
+// shouldSyncJira reports whether a project participates in Jira sync.
+// Both the global jira.host and the per-project jiraProjectKey must
+// be set; otherwise we skip silently when the user asked for `--source
+// all`. Validation guarantees we won't see a project key without a
+// host, so checking JiraProjectKey is sufficient here.
+func shouldSyncJira(cfg *config.Config, project config.Project) bool {
+	return cfg.Jira.Configured() && project.JiraProjectKey != ""
+}
+
+// requireJiraConfigured emits a precise error when the user asks for
+// `--source jira` but no project would actually be synced. It
+// distinguishes the global-not-configured, single-project-not-set, and
+// no-projects-at-all cases so the message tells the user what to fix.
+func requireJiraConfigured(cfg *config.Config, projects []config.Project, projectName string) error {
+	if !cfg.Jira.Configured() {
+		return fmt.Errorf("Jira is not configured. Set jira.host in scout.config.json to use Jira features.")
+	}
+	if projectName != "" {
+		if len(projects) == 1 && projects[0].JiraProjectKey == "" {
+			return fmt.Errorf("Project %q has no jiraProjectKey set; cannot sync Jira for it.", projectName)
+		}
+		return nil
+	}
+	for _, p := range projects {
+		if p.JiraProjectKey != "" {
+			return nil
+		}
+	}
+	return fmt.Errorf("No projects have jiraProjectKey set; nothing to sync from Jira.")
 }
 
 func selectProjects(cfg *config.Config, name string) ([]config.Project, error) {
