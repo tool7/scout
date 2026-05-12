@@ -6,10 +6,10 @@ import (
 
 func validateSource(value string) error {
 	switch value {
-	case "git", "jira", "code", "all":
+	case "git", "jira", "code", "prs", "all":
 		return nil
 	}
-	return fmt.Errorf("--source must be one of: git, jira, code, all")
+	return fmt.Errorf("--source must be one of: git, jira, code, prs, all")
 }
 
 func validateStatus(value string) error {

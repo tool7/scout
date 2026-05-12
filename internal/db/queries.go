@@ -41,6 +41,25 @@ type FileRow struct {
 	Rank     float64
 }
 
+type PRRow struct {
+	ID             string
+	Project        string
+	Provider       string
+	Number         int
+	Title          string
+	Body           string
+	State          string
+	Author         string
+	CreatedAt      string
+	UpdatedAt      string
+	MergedAt       string
+	SourceBranch   string
+	TargetBranch   string
+	URL            string
+	ReviewComments string
+	Rank           float64
+}
+
 type SyncStateRow struct {
 	Project     string
 	Source      string
@@ -48,6 +67,7 @@ type SyncStateRow struct {
 	CommitCount sql.NullInt64
 	TicketCount sql.NullInt64
 	FileCount   sql.NullInt64
+	PRCount     sql.NullInt64
 }
 
 type CommitSearchOptions struct {
@@ -73,6 +93,12 @@ type TicketSearchOptions struct {
 
 type FileSearchOptions struct {
 	Project string
+	Limit   int
+}
+
+type PRSearchOptions struct {
+	Project string
+	Since   string
 	Limit   int
 }
 
@@ -223,6 +249,63 @@ func SearchFiles(db *sql.DB, ftsQuery string, opts FileSearchOptions) ([]FileRow
 	return result, nil
 }
 
+func SearchPRs(db *sql.DB, ftsQuery string, opts PRSearchOptions) ([]PRRow, error) {
+	clauses := []string{"pull_requests_fts MATCH ?"}
+	args := []any{ftsQuery}
+
+	if opts.Project != "" {
+		clauses = append(clauses, "pr.project = ? COLLATE NOCASE")
+		args = append(args, opts.Project)
+	}
+	if opts.Since != "" {
+		clauses = append(clauses, "pr.updated_at >= ?")
+		args = append(args, opts.Since)
+	}
+
+	query := `
+		SELECT pr.id, pr.project, pr.provider, pr.number, pr.title,
+		       COALESCE(pr.body, ''), COALESCE(pr.state, ''), COALESCE(pr.author, ''),
+		       COALESCE(pr.created_at, ''), COALESCE(pr.updated_at, ''),
+		       COALESCE(pr.merged_at, ''), COALESCE(pr.source_branch, ''),
+		       COALESCE(pr.target_branch, ''), COALESCE(pr.url, ''),
+		       COALESCE(pr.review_comments, ''),
+		       bm25(pull_requests_fts) AS rank
+		FROM pull_requests_fts
+		JOIN pull_requests pr ON pr.rowid = pull_requests_fts.rowid
+		WHERE ` + joinAnd(clauses) + `
+		ORDER BY rank
+		LIMIT ?
+	`
+	args = append(args, opts.Limit)
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("PR search query failed: %w", err)
+	}
+	defer rows.Close()
+
+	var result []PRRow
+	for rows.Next() {
+		var r PRRow
+		if err := rows.Scan(
+			&r.ID, &r.Project, &r.Provider, &r.Number, &r.Title,
+			&r.Body, &r.State, &r.Author,
+			&r.CreatedAt, &r.UpdatedAt,
+			&r.MergedAt, &r.SourceBranch,
+			&r.TargetBranch, &r.URL,
+			&r.ReviewComments,
+			&r.Rank,
+		); err != nil {
+			return nil, fmt.Errorf("PR search scan failed: %w", err)
+		}
+		result = append(result, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("PR search iteration failed: %w", err)
+	}
+	return result, nil
+}
+
 func LastSynced(db *sql.DB, project, source string) (string, bool, error) {
 	var lastSynced string
 	err := db.QueryRow(
@@ -240,7 +323,7 @@ func LastSynced(db *sql.DB, project, source string) (string, bool, error) {
 
 func SyncState(db *sql.DB) ([]SyncStateRow, error) {
 	rows, err := db.Query(
-		"SELECT project, source, last_synced, commit_count, ticket_count, file_count FROM sync_state ORDER BY project, source",
+		"SELECT project, source, last_synced, commit_count, ticket_count, file_count, pr_count FROM sync_state ORDER BY project, source",
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read sync_state: %w", err)
@@ -250,7 +333,7 @@ func SyncState(db *sql.DB) ([]SyncStateRow, error) {
 	var result []SyncStateRow
 	for rows.Next() {
 		var r SyncStateRow
-		if err := rows.Scan(&r.Project, &r.Source, &r.LastSynced, &r.CommitCount, &r.TicketCount, &r.FileCount); err != nil {
+		if err := rows.Scan(&r.Project, &r.Source, &r.LastSynced, &r.CommitCount, &r.TicketCount, &r.FileCount, &r.PRCount); err != nil {
 			return nil, fmt.Errorf("failed to scan sync_state row: %w", err)
 		}
 		result = append(result, r)
@@ -261,14 +344,17 @@ func SyncState(db *sql.DB) ([]SyncStateRow, error) {
 	return result, nil
 }
 
-func Totals(db *sql.DB) (commits, tickets int, err error) {
+func Totals(db *sql.DB) (commits, tickets, prs int, err error) {
 	if err := db.QueryRow("SELECT COUNT(*) FROM commits").Scan(&commits); err != nil {
-		return 0, 0, fmt.Errorf("failed to count commits: %w", err)
+		return 0, 0, 0, fmt.Errorf("failed to count commits: %w", err)
 	}
 	if err := db.QueryRow("SELECT COUNT(*) FROM tickets").Scan(&tickets); err != nil {
-		return 0, 0, fmt.Errorf("failed to count tickets: %w", err)
+		return 0, 0, 0, fmt.Errorf("failed to count tickets: %w", err)
 	}
-	return commits, tickets, nil
+	if err := db.QueryRow("SELECT COUNT(*) FROM pull_requests").Scan(&prs); err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to count pull_requests: %w", err)
+	}
+	return commits, tickets, prs, nil
 }
 
 func joinAnd(clauses []string) string {

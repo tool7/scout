@@ -1,17 +1,20 @@
 # scout
 
-A local CLI that gives developers and QA engineers a conversational interface into a project's domain knowledge. It indexes **Git history**, **Jira tickets**, and **source code** across a configurable set of projects into a local SQLite database, and exposes them as read-only query commands — nothing leaves your machine.
+A local CLI that gives developers and QA engineers a conversational interface into a project's domain knowledge. It indexes **Git history**, **Jira tickets**, **source code**, and **pull requests** (GitHub or Bitbucket) across a configurable set of projects into a local SQLite database, and exposes them as read-only query commands — nothing leaves your machine.
 
 **Primary use cases:**
 
-- Understanding *why* code works the way it does (historical context from Git + Jira)
+- Understanding *why* code works the way it does (historical context from Git + Jira + PR review discussion)
 - Answering questions about past bugs, regressions, and feature decisions
 - Checking whether a user-reported issue has been seen or addressed before
+- Recovering the rationale that's only in PR review comments
 
 ## Requirements
 
 - **Git** on your `PATH` (used for `fetch`, `log`, `ls-tree`, and `cat-file`)
 - A **web browser** *only if you want Jira indexing* — the one-time `scout jira-login` opens the Atlassian consent screen. Jira is fully optional; scout works as a Git/code-only knowledge base if you skip it.
+- A **web browser** *only if you want GitHub PR indexing* — `scout github-login` runs GitHub's OAuth Device Flow: it prints a short code, opens `https://github.com/login/device`, and saves the resulting token to `<dataDir>/github_token.json` with `0600` permissions. No manual PAT creation.
+- A **Bitbucket API token** *only if you want Bitbucket PR indexing* — entered interactively via `scout bitbucket-login` and stored at `<dataDir>/bitbucket_token.json` with `0600` permissions.
 - **Go 1.22+** *only if building from source* (the pre-built binaries are statically linked and need no Go runtime)
 
 The SQLite driver is pure Go (`modernc.org/sqlite`), so no C/C++ toolchain is required.
@@ -84,7 +87,7 @@ cp scout.config.example.json ~/.scout/config.json
 
 The CLI also accepts project-local configs (`scout.config.json`, `.scout.json`, or `.config/scout/config.json`) discovered by walking up from the current directory; the home-directory file is the fallback when none is found.
 
-**Example (with Jira):**
+**Example (with Jira and PRs):**
 
 ```json
 {
@@ -97,13 +100,21 @@ The CLI also accepts project-local configs (`scout.config.json`, `.scout.json`, 
       "name": "ExampleProject",
       "gitPath": "/Users/<username>/Projects/example-project",
       "jiraProjectKey": "EXAMPLE",
+      "githubRepo": "example-org/example-project",
       "gitRemote": "origin"
+    },
+    {
+      "name": "InternalApp",
+      "gitPath": "/Users/<username>/Projects/internal-app",
+      "jiraProjectKey": "INT",
+      "bitbucketRepo": "internal-app",
+      "bitbucketWorkspace": "example-org"
     }
   ]
 }
 ```
 
-**Example (Git + code only, no Jira):**
+**Example (Git + code only, no Jira or PRs):**
 
 ```json
 {
@@ -120,12 +131,14 @@ The CLI also accepts project-local configs (`scout.config.json`, `.scout.json`, 
 
 **Fields:**
 
-- `dataDir` — where the SQLite database (`knowledge.db`) and the OAuth token file (`oauth_tokens.json`) are written. Created on first sync / first login. Supports `~` expansion; relative paths resolve against the config file's directory.
+- `dataDir` — where the SQLite database (`knowledge.db`), the Jira OAuth token file (`oauth_tokens.json`), and any GitHub/Bitbucket credential files (`github_token.json`, `bitbucket_token.json`) are written. Created on first sync / first login. Supports `~` expansion; relative paths resolve against the config file's directory.
 - `jira` — *(optional)* omit the whole block to disable Jira indexing.
 - `jira.host` — your Atlassian Cloud base URL. Used to pick the right `cloudId` if your account has access to multiple Atlassian sites.
 - `projects[].name` — a human label used in sync output and as the partition key in the database
 - `projects[].gitPath` — path to a locally checked-out clone. Supports `~`.
 - `projects[].jiraProjectKey` — *(optional, requires `jira.host`)* the Jira project key scoping ticket fetches (e.g. `EXAMPLE`, `PROJ`). Projects without this field are skipped during Jira sync.
+- `projects[].githubRepo` — *(optional)* the GitHub repository in `owner/repo` form. When set, PR sync fetches pull requests, descriptions, and review bodies from GitHub. Mutually exclusive with `bitbucketRepo`.
+- `projects[].bitbucketRepo` / `projects[].bitbucketWorkspace` — *(optional, must be set together)* the Bitbucket repo slug and workspace. When set, PR sync fetches pull requests and inline comments from Bitbucket. Mutually exclusive with `githubRepo`.
 - `projects[].gitRemote` — remote to `git fetch` before indexing. Defaults to `origin`.
 - `projects[].indexRef` — *(optional)* Git ref to index source code from. Defaults to the result of `git symbolic-ref --short refs/remotes/origin/HEAD` (i.e. the configured default branch — typically `origin/master` or `origin/main`). Set explicitly only if your project ships from a non-default branch.
 - `projects[].excludePaths` — *(optional)* array of `gitignore`-style globs matched against repo-relative paths during code sync. Empty by default. Globs are evaluated by [doublestar](https://github.com/bmatcuk/doublestar); leading `/` is not significant.
@@ -134,15 +147,21 @@ On startup the config is validated; any errors are printed with the offending pa
 
 ## First sync
 
-If you configured Jira, authenticate to it once. Then populate the local database:
+If you configured Jira and/or PR sync, authenticate once per provider. Then populate the local database:
 
 ```sh
-scout jira-login      # only if jira.host is set; stores OAuth tokens at <dataDir>/oauth_tokens.json
-scout sync            # full fetch on first run
-scout status          # confirm counts and last-synced timestamps per project/source
+scout jira-login        # only if jira.host is set; stores OAuth tokens at <dataDir>/oauth_tokens.json
+scout github-login      # only if any project has githubRepo set; opens browser, one short code to enter on github.com/login/device
+scout bitbucket-login   # only if any project has bitbucketRepo set; prompts for Atlassian email + API token, stores at <dataDir>/bitbucket_token.json
+scout sync              # full fetch on first run
+scout status            # confirm counts and last-synced timestamps per project/source
 ```
 
-`scout sync` automatically skips Jira for projects (or installs) without Jira configured, so a Git/code-only setup just works without `scout jira-login`.
+`scout sync` automatically skips Jira and PR sources for projects (or installs) without the corresponding configuration, so a Git/code-only setup just works without any login.
+
+**GitHub:** `scout github-login` opens a browser tab and walks you through GitHub's OAuth Device Flow — no manual token creation required. The granted token has the `repo` scope (the minimum needed to read PRs across public and private repositories).
+
+**Bitbucket API token scopes:** create one at https://id.atlassian.com/manage-profile/security/api-tokens → **Create API token with scopes** → pick **Bitbucket** as the app, then assign at least the `read:pullrequest:bitbucket` and `read:user:bitbucket` scopes. The Basic-auth username is your **Atlassian account email** (not your Bitbucket username).
 
 `scout jira-login` runs the Atlassian OAuth 2.0 (3LO) flow: it boots a transient `http://127.0.0.1:53127/callback` listener, opens the Atlassian consent screen in your default browser, and saves the resulting tokens (access + refresh + cloudId) with `0600` permissions. Subsequent `scout sync` runs refresh the access token automatically — no further interactive logins until your refresh token is revoked or you delete the file. To forget the tokens, run `scout jira-logout`. (If port `53127` is already in use on your machine — rare, it's in the IANA private range — `scout jira-login` will report a clear bind error.)
 
@@ -152,17 +171,17 @@ scout status          # confirm counts and last-synced timestamps per project/so
 
 ### `scout search <query>` — broad keyword lookup
 
-Full-text search across all indexed Git commits, Jira tickets, and source-code files.
+Full-text search across all indexed Git commits, Jira tickets, source-code files, and pull requests.
 
 | Flag                    | Default | Description                                  |
 | ----------------------- | ------- | -------------------------------------------- |
 | `-p, --project <name>`  | —       | Restrict to a single configured project      |
-| `-s, --source <source>` | `all`   | Which source to search: `git`, `jira`, `code`, `all` |
+| `-s, --source <source>` | `all`   | Which source to search: `git`, `jira`, `code`, `prs`, `all` |
 | `-l, --limit <n>`       | 20      | Max results (1–50)                           |
 
 ### `scout history <topic>` — chronological narrative
 
-Unified timeline of commits and tickets for a topic/feature/file, oldest first, top-ranked only.
+Unified timeline of commits, tickets, and PRs for a topic/feature/file, oldest first, top-ranked only.
 
 | Flag                     | Default | Description                                  |
 | ------------------------ | ------- | -------------------------------------------- |
@@ -186,14 +205,15 @@ Jira tickets most similar to a bug / behaviour description.
 scout sync                                   # sync everything
 scout sync -p ExampleProject -s git          # one project, one source
 scout sync -s code                           # only refresh source-code indexes
-scout sync --full                            # force full Jira/code re-fetch
+scout sync -s prs                            # only refresh PR indexes (GitHub + Bitbucket)
+scout sync --full                            # force full Jira/code/PR re-fetch
 ```
 
 | Flag                    | Default | Description                                       |
 | ----------------------- | ------- | ------------------------------------------------- |
 | `-p, --project <name>`  | —       | Only sync the named project                       |
-| `-s, --source <source>` | `all`   | Only sync a specific source: `git`, `jira`, `code`, `all` |
-| `-f, --full`            | false   | Force a full Jira/code re-fetch (no-op for git)   |
+| `-s, --source <source>` | `all`   | Only sync a specific source: `git`, `jira`, `code`, `prs`, `all` |
+| `-f, --full`            | false   | Force a full Jira/code/PR re-fetch (no-op for git) |
 
 ### `scout status` — sync state
 
@@ -202,6 +222,14 @@ Show last sync time and record counts per project / source.
 ```sh
 scout status
 ```
+
+### `scout github-login` / `scout github-logout` — manage GitHub access
+
+`scout github-login` runs GitHub's OAuth Device Flow: it prints a short user code, attempts to open `https://github.com/login/device` in your default browser, polls until you approve, then saves the resulting access token to `<dataDir>/github_token.json` with `0600` permissions. The token is granted the `repo` scope (minimum required to read PRs across public and private repositories). `scout github-logout` deletes that file.
+
+### `scout bitbucket-login` / `scout bitbucket-logout` — manage Bitbucket API token
+
+`scout bitbucket-login` prompts for your **Atlassian account email** and a **Bitbucket API token** (created at https://id.atlassian.com/manage-profile/security/api-tokens with the `read:pullrequest:bitbucket` and `read:user:bitbucket` scopes), validates them against `GET /user`, and saves both to `<dataDir>/bitbucket_token.json` with `0600` permissions. `scout bitbucket-logout` deletes that file.
 
 ### `scout --instructions` — full machine- and human-readable usage reference
 
@@ -228,6 +256,16 @@ Git sync indexes **commit metadata only** — subjects, bodies, author, date, ch
 4. Records a timestamp and ticket count in `sync_state`
 
 By default Jira sync is incremental: only issues `updated` since the last successful sync (with a 10-minute overlap to absorb clock skew) are refetched. Use `--full` to force a complete refetch. Comments are pulled inline with the search response — tickets whose comment count exceeds the inline page have only the first page indexed, and a single `WARN` line is logged for the run with the count of truncated tickets.
+
+**What PR sync does:**
+
+1. For each project with `githubRepo` set: paginated `GET /repos/{owner}/{repo}/pulls?state=all&sort=updated&direction=desc` with `Authorization: Bearer <PAT>`, plus per-PR `GET /repos/{owner}/{repo}/pulls/{n}/reviews` to capture the review discussion bodies.
+2. For each project with `bitbucketRepo`+`bitbucketWorkspace`: paginated `GET /repositories/{workspace}/{repo}/pullrequests` with HTTP Basic auth (Atlassian account email + API token), plus per-PR `GET .../comments` for the discussion thread.
+3. Provider state values are normalized to `open`, `merged`, or `closed`. GitHub maps `closed` + non-empty `merged_at` → `merged`; Bitbucket maps `DECLINED` and `SUPERSEDED` → `closed`.
+4. Upserts into the `pull_requests` table (composite primary key `(project, id)` where `id` is `gh#<number>` or `bb#<number>`) and rebuilds `pull_requests_fts`.
+5. Records a timestamp and PR count in `sync_state` under the `prs` source.
+
+PR sync is incremental by default with the same 10-minute overlap as Jira. Review/comment fetches are only made for PRs that pass the `since` filter, so steady-state syncs are fast even for large repos.
 
 **What Code sync does:**
 
@@ -263,6 +301,12 @@ scout history 'annotations' --since 2024-01-01
 
 # "Show me only the open tickets that look like this bug."
 scout related 'PDF export issue' --status open
+
+# "What did reviewers say about the caching strategy?"
+scout search 'caching strategy' --source prs
+
+# "Find PR discussions that mention rate limiting."
+scout search 'rate limiting' --source prs
 ```
 
 Quote multi-word queries with single quotes; wrap an exact phrase in `"…"` inside the query to require it as a phrase match.
@@ -271,7 +315,9 @@ Quote multi-word queries with single quotes; wrap an exact phrase in `"…"` ins
 
 - The SQLite database lives at `<dataDir>/knowledge.db`. It is gitignored by default.
 - Jira OAuth tokens, if you opted into Jira, live at `<dataDir>/oauth_tokens.json` with `0600` permissions. They never appear in the config file or in `knowledge.db`. Run `scout jira-logout` to delete them.
-- The query subcommands (`search`, `history`, `related`, `status`) never make network calls. Only `sync` and `jira-login` talk to Atlassian / your Git remotes. `scout related` is Jira-only and refuses to run when Jira isn't configured.
+- GitHub OAuth access tokens, if you opted into GitHub PR indexing, live at `<dataDir>/github_token.json` with `0600` permissions. Run `scout github-logout` to delete them.
+- Bitbucket API tokens, if you opted into Bitbucket PR indexing, live at `<dataDir>/bitbucket_token.json` with `0600` permissions. Run `scout bitbucket-logout` to delete them.
+- The query subcommands (`search`, `history`, `related`, `status`) never make network calls. Only `sync`, `jira-login`, `github-login`, and `bitbucket-login` talk to remote services. `scout related` is Jira-only and refuses to run when Jira isn't configured.
 
 ## Repository layout
 
@@ -284,15 +330,20 @@ internal/
 ├── config/                          # config discovery, validation, ~/relative path resolution
 ├── db/
 │   ├── client.go                    # SQLite open + migrations runner (modernc.org/sqlite)
-│   ├── queries.go                   # SearchCommits / SearchTickets / SearchFiles / sync state
+│   ├── queries.go                   # SearchCommits / SearchTickets / SearchFiles / SearchPRs / sync state
 │   └── migrations/
 │       ├── 001_initial.sql          # commits, tickets, sync_state, FTS5 tables
 │       ├── 002_fts_porter_stemmer.sql
-│       └── 003_files.sql            # files table, files_fts (trigram), file_count column
+│       ├── 003_files.sql            # files table, files_fts (trigram), file_count column
+│       ├── 004_commits_per_project_pk.sql
+│       └── 005_pull_requests.sql    # pull_requests table, pull_requests_fts, pr_count column
 ├── sync/
 │   ├── git.go                       # Git fetch (shared) + commit log extraction + indexing
 │   ├── jira.go                      # Jira issues + comments + indexing
-│   └── code.go                      # Source-code tree walk + filter ladder + indexing
+│   ├── code.go                      # Source-code tree walk + filter ladder + indexing
+│   ├── prs.go                       # Shared PR sync types + token storage + DB helpers
+│   ├── github.go                    # GitHub REST API client + PR + review fetch
+│   └── bitbucket.go                 # Bitbucket REST API client + PR + comment fetch
 ├── adf/                             # Atlassian Document Format → plain text
 ├── format/                          # Commit / ticket / file pretty-printers
 ├── fts/                             # User query → FTS5 MATCH expression (natural + code modes)

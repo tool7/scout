@@ -18,6 +18,7 @@ type rankedEntry struct {
 	commit *db.CommitRow
 	ticket *db.TicketRow
 	file   *db.FileRow
+	pr     *db.PRRow
 }
 
 func newSearchCmd() *cobra.Command {
@@ -29,7 +30,7 @@ func newSearchCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "search <query>",
-		Short: "Broad full-text search across Git commits, Jira tickets, and source-code files",
+		Short: "Broad full-text search across Git commits, Jira tickets, source-code files, and pull requests",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateSource(source); err != nil {
@@ -43,7 +44,7 @@ func newSearchCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&project, "project", "p", "", "Only search within one project")
-	cmd.Flags().StringVarP(&source, "source", "s", "all", "Which source to search: git | jira | code | all")
+	cmd.Flags().StringVarP(&source, "source", "s", "all", "Which source to search: git | jira | code | prs | all")
 	cmd.Flags().IntVarP(&limit, "limit", "l", 20, "Maximum results to return (1-50)")
 
 	return cmd
@@ -64,7 +65,7 @@ func runSearch(query, project, source string, limit int) error {
 	defer rt.close()
 
 	var commits []db.CommitRow
-	if naturalQuery != "" && source != "jira" && source != "code" {
+	if naturalQuery != "" && (source == "all" || source == "git") {
 		commits, err = db.SearchCommits(rt.db, naturalQuery, db.CommitSearchOptions{
 			Project: project,
 			Limit:   limit,
@@ -75,7 +76,7 @@ func runSearch(query, project, source string, limit int) error {
 	}
 
 	var tickets []db.TicketRow
-	if naturalQuery != "" && source != "git" && source != "code" {
+	if naturalQuery != "" && (source == "all" || source == "jira") {
 		tickets, err = db.SearchTickets(rt.db, naturalQuery, db.TicketSearchOptions{
 			Project: project,
 			Status:  db.TicketStatusAll,
@@ -87,7 +88,7 @@ func runSearch(query, project, source string, limit int) error {
 	}
 
 	var files []db.FileRow
-	if codeQuery != "" && source != "git" && source != "jira" {
+	if codeQuery != "" && (source == "all" || source == "code") {
 		files, err = db.SearchFiles(rt.db, codeQuery, db.FileSearchOptions{
 			Project: project,
 			Limit:   limit,
@@ -97,7 +98,18 @@ func runSearch(query, project, source string, limit int) error {
 		}
 	}
 
-	entries := make([]rankedEntry, 0, len(commits)+len(tickets)+len(files))
+	var prs []db.PRRow
+	if naturalQuery != "" && (source == "all" || source == "prs") {
+		prs, err = db.SearchPRs(rt.db, naturalQuery, db.PRSearchOptions{
+			Project: project,
+			Limit:   limit,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	entries := make([]rankedEntry, 0, len(commits)+len(tickets)+len(files)+len(prs))
 	for i := range commits {
 		entries = append(entries, rankedEntry{kind: "commit", rank: commits[i].Rank, commit: &commits[i]})
 	}
@@ -106,6 +118,9 @@ func runSearch(query, project, source string, limit int) error {
 	}
 	for i := range files {
 		entries = append(entries, rankedEntry{kind: "file", rank: files[i].Rank, file: &files[i]})
+	}
+	for i := range prs {
+		entries = append(entries, rankedEntry{kind: "pr", rank: prs[i].Rank, pr: &prs[i]})
 	}
 
 	sort.SliceStable(entries, func(i, j int) bool { return entries[i].rank < entries[j].rank })
@@ -137,6 +152,8 @@ func runSearch(query, project, source string, limit int) error {
 			body = format.Ticket(*entry.ticket, false)
 		case entry.kind == "file" && entry.file != nil:
 			body = format.File(*entry.file)
+		case entry.kind == "pr" && entry.pr != nil:
+			body = format.PR(*entry.pr)
 		}
 		out += "\n\n" + strconv.Itoa(i+1) + ". " + body
 	}

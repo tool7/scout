@@ -17,6 +17,7 @@ type timelineEvent struct {
 	date   string
 	commit *db.CommitRow
 	ticket *db.TicketRow
+	pr     *db.PRRow
 }
 
 func newHistoryCmd() *cobra.Command {
@@ -28,7 +29,7 @@ func newHistoryCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "history <topic>",
-		Short: "Unified chronological timeline for a topic (commits + tickets, oldest first)",
+		Short: "Unified chronological timeline for a topic (commits + tickets + PRs, oldest first)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateRange("--limit", limit, 1, 100); err != nil {
@@ -74,8 +75,16 @@ func runHistory(topic, project, since string, limit int) error {
 	if err != nil {
 		return err
 	}
+	prs, err := db.SearchPRs(rt.db, ftsQuery, db.PRSearchOptions{
+		Project: project,
+		Since:   since,
+		Limit:   limit,
+	})
+	if err != nil {
+		return err
+	}
 
-	events := make([]timelineEvent, 0, len(commits)+len(tickets))
+	events := make([]timelineEvent, 0, len(commits)+len(tickets)+len(prs))
 	for i := range commits {
 		events = append(events, timelineEvent{kind: "commit", rank: commits[i].Rank, date: commits[i].Date, commit: &commits[i]})
 	}
@@ -85,6 +94,16 @@ func runHistory(topic, project, since string, limit int) error {
 			date = tickets[i].CreatedAt
 		}
 		events = append(events, timelineEvent{kind: "ticket", rank: tickets[i].Rank, date: date, ticket: &tickets[i]})
+	}
+	for i := range prs {
+		date := prs[i].MergedAt
+		if date == "" {
+			date = prs[i].UpdatedAt
+		}
+		if date == "" {
+			date = prs[i].CreatedAt
+		}
+		events = append(events, timelineEvent{kind: "pr", rank: prs[i].Rank, date: date, pr: &prs[i]})
 	}
 
 	sort.SliceStable(events, func(i, j int) bool { return events[i].rank < events[j].rank })
@@ -122,6 +141,8 @@ func runHistory(topic, project, since string, limit int) error {
 		switch {
 		case event.kind == "commit" && event.commit != nil:
 			body = format.Commit(*event.commit)
+		case event.kind == "pr" && event.pr != nil:
+			body = format.PR(*event.pr)
 		case event.ticket != nil:
 			body = format.Ticket(*event.ticket, false)
 		}

@@ -48,6 +48,10 @@ func NewRootCmd(version string) *cobra.Command {
 	root.AddCommand(newStatusCmd())
 	root.AddCommand(newJiraLoginCmd())
 	root.AddCommand(newJiraLogoutCmd())
+	root.AddCommand(newGitHubLoginCmd())
+	root.AddCommand(newGitHubLogoutCmd())
+	root.AddCommand(newBitbucketLoginCmd())
+	root.AddCommand(newBitbucketLogoutCmd())
 
 	return root
 }

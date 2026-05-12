@@ -165,6 +165,73 @@ func Ticket(ticket db.TicketRow, includeComments bool) string {
 	return header + "\n" + summary + descriptionLine + "\n" + commentsHeader + "\n" + strings.Join(commentLines, "\n")
 }
 
+type prReviewComment struct {
+	Author      string `json:"author"`
+	Body        string `json:"body"`
+	SubmittedAt string `json:"submitted_at"`
+}
+
+func parsePRReviewArray(raw string) []prReviewComment {
+	if raw == "" {
+		return nil
+	}
+	var out []prReviewComment
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+func PR(pr db.PRRow) string {
+	updated := ""
+	if pr.UpdatedAt != "" {
+		updated = " · updated " + isoDay(pr.UpdatedAt)
+	}
+	state := pr.State
+	if state == "" {
+		state = "unknown"
+	}
+	author := ""
+	if pr.Author != "" {
+		author = " · " + pr.Author
+	}
+
+	header := "[pr · " + pr.Project + "] #" + strconv.Itoa(pr.Number) +
+		" · " + state + author + updated
+
+	title := "Title: " + pr.Title
+
+	body := strings.TrimSpace(pr.Body)
+	bodyLine := ""
+	if body != "" {
+		bodyLine = "\n" + truncate(body, maxBodyChars)
+	}
+
+	reviews := parsePRReviewArray(pr.ReviewComments)
+	if len(reviews) == 0 {
+		return header + "\n" + title + bodyLine
+	}
+
+	start := len(reviews) - maxCommentsShown
+	if start < 0 {
+		start = 0
+	}
+	latest := reviews[start:]
+
+	lines := make([]string, 0, len(latest))
+	for _, c := range latest {
+		text := whitespaceRun.ReplaceAllString(c.Body, " ")
+		lines = append(lines, "  - "+c.Author+" ("+isoDay(c.SubmittedAt)+"): "+truncate(text, maxCommentChars))
+	}
+
+	commentsHeader := "Review comments:"
+	if len(reviews) > maxCommentsShown {
+		commentsHeader = "Review comments (last " + strconv.Itoa(maxCommentsShown) + " of " + strconv.Itoa(len(reviews)) + "):"
+	}
+
+	return header + "\n" + title + bodyLine + "\n" + commentsHeader + "\n" + strings.Join(lines, "\n")
+}
+
 func File(file db.FileRow) string {
 	lang := ""
 	if file.Language != "" {

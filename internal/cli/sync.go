@@ -19,7 +19,7 @@ func newSyncCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "sync",
-		Short: "Sync Git, Jira, and code data into the local knowledge base",
+		Short: "Sync Git, Jira, code, and PR data into the local knowledge base",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateSource(source); err != nil {
@@ -30,8 +30,8 @@ func newSyncCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&project, "project", "p", "", "Only sync the named project")
-	cmd.Flags().StringVarP(&source, "source", "s", "all", "Only sync a specific source: git | jira | code | all")
-	cmd.Flags().BoolVarP(&full, "full", "f", false, "Force a full Jira/code re-fetch instead of incremental (no-op for git)")
+	cmd.Flags().StringVarP(&source, "source", "s", "all", "Only sync a specific source: git | jira | code | prs | all")
+	cmd.Flags().BoolVarP(&full, "full", "f", false, "Force a full Jira/code/PR re-fetch instead of incremental (no-op for git)")
 
 	return cmd
 }
@@ -57,6 +57,11 @@ func runSync(ctx context.Context, projectName, source string, full bool) error {
 			return err
 		}
 	}
+	if source == "prs" {
+		if err := requirePRConfigured(projects, projectName); err != nil {
+			return err
+		}
+	}
 
 	fetched := syncpkg.NewFetchSet()
 
@@ -76,9 +81,39 @@ func runSync(ctx context.Context, projectName, source string, full bool) error {
 				return err
 			}
 		}
+		if (source == "prs" || source == "all") && project.HasPRSource() {
+			if project.HasGitHub() {
+				if _, err := syncpkg.SyncGitHubProject(ctx, rt.db, project, rt.cfg.DataDir, syncpkg.PRSyncOptions{Full: full}); err != nil {
+					return err
+				}
+			}
+			if project.HasBitbucket() {
+				if _, err := syncpkg.SyncBitbucketProject(ctx, rt.db, project, rt.cfg.DataDir, syncpkg.PRSyncOptions{Full: full}); err != nil {
+					return err
+				}
+			}
+		}
 	}
 
 	return nil
+}
+
+// requirePRConfigured mirrors requireJiraConfigured: when the user
+// asks for `--source prs` but nothing would be synced, explain exactly
+// why so they can fix the config rather than seeing a silent no-op.
+func requirePRConfigured(projects []config.Project, projectName string) error {
+	if projectName != "" {
+		if len(projects) == 1 && !projects[0].HasPRSource() {
+			return fmt.Errorf("Project %q has no githubRepo or bitbucketRepo set; cannot sync PRs for it.", projectName)
+		}
+		return nil
+	}
+	for _, p := range projects {
+		if p.HasPRSource() {
+			return nil
+		}
+	}
+	return fmt.Errorf("No projects have githubRepo or bitbucketRepo set; nothing to sync from PRs.")
 }
 
 // shouldSyncJira reports whether a project participates in Jira sync.

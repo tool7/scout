@@ -30,7 +30,7 @@ func runStatus() error {
 	}
 	defer rt.close()
 
-	commits, tickets, err := db.Totals(rt.db)
+	commits, tickets, prs, err := db.Totals(rt.db)
 	if err != nil {
 		return err
 	}
@@ -40,13 +40,13 @@ func runStatus() error {
 	}
 
 	dbPath := filepath.Join(rt.cfg.DataDir, "knowledge.db")
-	printStatus(rt.cfg, dbPath, commits, tickets, states)
+	printStatus(rt.cfg, dbPath, commits, tickets, prs, states)
 	return nil
 }
 
-func printStatus(cfg *config.Config, dbPath string, commits, tickets int, states []db.SyncStateRow) {
+func printStatus(cfg *config.Config, dbPath string, commits, tickets, prs int, states []db.SyncStateRow) {
 	writeStdout("Database:  " + dbPath)
-	writeStdout("Totals:    " + strconv.Itoa(commits) + " commit(s), " + strconv.Itoa(tickets) + " ticket(s)")
+	writeStdout("Totals:    " + strconv.Itoa(commits) + " commit(s), " + strconv.Itoa(tickets) + " ticket(s), " + strconv.Itoa(prs) + " PR(s)")
 	writeStdout("")
 
 	byProject := make(map[string]map[string]db.SyncStateRow)
@@ -61,7 +61,7 @@ func printStatus(cfg *config.Config, dbPath string, commits, tickets int, states
 
 	rows := [][]string{{"project", "source", "last synced", "records"}}
 	for _, project := range cfg.Projects {
-		for _, source := range []string{"git", "jira", "code"} {
+		for _, source := range []string{"git", "jira", "code", "prs"} {
 			synced := "(never)"
 			records := "-"
 			if state, ok := byProject[project.Name][source]; ok {
@@ -73,6 +73,8 @@ func printStatus(cfg *config.Config, dbPath string, commits, tickets int, states
 					records = nullableCount(state.TicketCount)
 				case "code":
 					records = nullableCount(state.FileCount)
+				case "prs":
+					records = nullableCount(state.PRCount)
 				}
 			}
 			rows = append(rows, []string{project.Name, source, synced, records})

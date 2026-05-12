@@ -8,7 +8,15 @@
       "name": "ExampleProject",
       "gitPath": "/Users/<username>/Projects/example-project",
       "jiraProjectKey": "EXAMPLE",
+      "githubRepo": "your-org/example-project",
       "gitRemote": "origin"
+    },
+    {
+      "name": "InternalApp",
+      "gitPath": "/Users/<username>/Projects/internal-app",
+      "jiraProjectKey": "INT",
+      "bitbucketRepo": "internal-app",
+      "bitbucketWorkspace": "your-org"
     }
   ]
 }

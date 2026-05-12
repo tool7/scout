@@ -27,6 +27,7 @@ builds:
       - -X main.version={{.Version}}
       - -X scout/internal/oauth.ClientID={{.Env.SCOUT_OAUTH_CLIENT_ID}}
       - -X scout/internal/oauth.ClientSecret={{.Env.SCOUT_OAUTH_CLIENT_SECRET}}
+      - -X scout/internal/githubauth.ClientID={{.Env.SCOUT_GITHUB_CLIENT_ID}}
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:

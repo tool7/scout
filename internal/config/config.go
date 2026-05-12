@@ -17,16 +17,28 @@ import (
 // `project = "<key>"` clauses.
 var jiraProjectKeyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]+$`)
 
+// gitHubRepoPattern matches "owner/repo" — exactly one slash, both
+// halves non-empty, restricted to characters GitHub accepts in user
+// and repo names. Keeps malformed slugs from reaching the API.
+var gitHubRepoPattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$`)
+
 const moduleName = "scout"
 
 type Project struct {
-	Name           string   `json:"name"`
-	GitPath        string   `json:"gitPath"`
-	JiraProjectKey string   `json:"jiraProjectKey"`
-	GitRemote      string   `json:"gitRemote"`
-	IndexRef       string   `json:"indexRef"`
-	ExcludePaths   []string `json:"excludePaths"`
+	Name               string   `json:"name"`
+	GitPath            string   `json:"gitPath"`
+	JiraProjectKey     string   `json:"jiraProjectKey"`
+	GitRemote          string   `json:"gitRemote"`
+	IndexRef           string   `json:"indexRef"`
+	ExcludePaths       []string `json:"excludePaths"`
+	GitHubRepo         string   `json:"githubRepo"`
+	BitbucketRepo      string   `json:"bitbucketRepo"`
+	BitbucketWorkspace string   `json:"bitbucketWorkspace"`
 }
+
+func (p Project) HasGitHub() bool    { return p.GitHubRepo != "" }
+func (p Project) HasBitbucket() bool { return p.BitbucketRepo != "" && p.BitbucketWorkspace != "" }
+func (p Project) HasPRSource() bool  { return p.HasGitHub() || p.HasBitbucket() }
 
 type Jira struct {
 	Host string `json:"host"`
@@ -230,6 +242,25 @@ func validate(cfg *Config) []validationIssue {
 					message: "exclude pattern must not be empty",
 				})
 			}
+		}
+
+		if p.GitHubRepo != "" && !gitHubRepoPattern.MatchString(p.GitHubRepo) {
+			issues = append(issues, validationIssue{
+				path:    base + ".githubRepo",
+				message: "githubRepo must be in 'owner/repo' format",
+			})
+		}
+		if (p.BitbucketRepo != "") != (p.BitbucketWorkspace != "") {
+			issues = append(issues, validationIssue{
+				path:    base + ".bitbucketRepo",
+				message: "bitbucketRepo and bitbucketWorkspace must be set together",
+			})
+		}
+		if p.GitHubRepo != "" && p.BitbucketRepo != "" {
+			issues = append(issues, validationIssue{
+				path:    base + ".githubRepo",
+				message: "a project cannot set both githubRepo and bitbucketRepo",
+			})
 		}
 	}
 
