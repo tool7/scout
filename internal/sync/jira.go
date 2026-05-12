@@ -15,7 +15,7 @@ import (
 	"scout/internal/config"
 	dbpkg "scout/internal/db"
 	"scout/internal/logger"
-	"scout/internal/oauth"
+	"scout/internal/jiraauth"
 )
 
 const (
@@ -77,14 +77,14 @@ type jiraClient struct {
 }
 
 func newJiraClient(ctx context.Context, dataDir string) (*jiraClient, error) {
-	httpClient, cloudID, err := oauth.HTTPClient(ctx, dataDir)
+	httpClient, cloudID, err := jiraauth.HTTPClient(ctx, dataDir)
 	if err != nil {
 		return nil, err
 	}
 	httpClient.Timeout = jiraTimeout
 	return &jiraClient{
 		httpClient: httpClient,
-		baseURL:    strings.TrimRight(oauth.APIBaseURL, "/") + "/" + cloudID + "/rest/api/3",
+		baseURL:    strings.TrimRight(jiraauth.APIBaseURL, "/") + "/" + cloudID + "/rest/api/3",
 	}, nil
 }
 

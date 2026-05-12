@@ -1,4 +1,4 @@
-package oauth
+package jiraauth
 
 import (
 	"context"
@@ -20,13 +20,13 @@ import (
 	"golang.org/x/oauth2"
 )
 
-var ErrCredentialsMissing = errors.New("oauth client credentials are not embedded in this build (rebuild with -ldflags -X scout/internal/oauth.ClientID=... -X scout/internal/oauth.ClientSecret=...)")
+var ErrCredentialsMissing = errors.New("Jira oauth client credentials are not embedded in this build (rebuild with -ldflags -X scout/internal/jiraauth.ClientID=... -X scout/internal/jiraauth.ClientSecret=...)")
 
 // Login runs the full Atlassian 3LO flow against the user's browser.
 // jiraHost is the configured https://your-org.atlassian.net so that
 // when accessible-resources returns multiple Atlassian sites we can
 // pick the right cloudId. On success the returned Tokens are also
-// persisted to <dataDir>/oauth_tokens.json.
+// persisted to <dataDir>/jira_tokens.json.
 func Login(ctx context.Context, dataDir, jiraHost string) (Tokens, error) {
 	if ClientID == "" || ClientSecret == "" {
 		return Tokens{}, ErrCredentialsMissing

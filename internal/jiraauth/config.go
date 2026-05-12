@@ -1,4 +1,4 @@
-package oauth
+package jiraauth
 
 // ClientID and ClientSecret identify the Scout OAuth 2.0 (3LO) app
 // registered at developer.atlassian.com. They are injected at release
@@ -8,8 +8,8 @@ package oauth
 // Example release build:
 //
 //	go build -ldflags "\
-//	  -X scout/internal/oauth.ClientID=<client-id> \
-//	  -X scout/internal/oauth.ClientSecret=<client-secret>" \
+//	  -X scout/internal/jiraauth.ClientID=<client-id> \
+//	  -X scout/internal/jiraauth.ClientSecret=<client-secret>" \
 //	  ./cmd/scout
 var (
 	ClientID     = ""
@@ -33,7 +33,7 @@ const (
 	// Chosen from the IANA dynamic/private range (49152–65535) and
 	// deliberately uncommon to avoid colliding with other dev servers.
 	RedirectPort  = 53127
-	TokenFileName = "oauth_tokens.json"
+	TokenFileName = "jira_tokens.json"
 )
 
 var Scopes = []string{

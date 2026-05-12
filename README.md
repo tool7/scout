@@ -131,7 +131,7 @@ The CLI also accepts project-local configs (`scout.config.json`, `.scout.json`, 
 
 **Fields:**
 
-- `dataDir` — where the SQLite database (`knowledge.db`), the Jira OAuth token file (`oauth_tokens.json`), and any GitHub/Bitbucket credential files (`github_token.json`, `bitbucket_token.json`) are written. Created on first sync / first login. Supports `~` expansion; relative paths resolve against the config file's directory.
+- `dataDir` — where the SQLite database (`knowledge.db`), the Jira OAuth token file (`jira_tokens.json`), and any GitHub/Bitbucket credential files (`github_token.json`, `bitbucket_token.json`) are written. Created on first sync / first login. Supports `~` expansion; relative paths resolve against the config file's directory.
 - `jira` — *(optional)* omit the whole block to disable Jira indexing.
 - `jira.host` — your Atlassian Cloud base URL. Used to pick the right `cloudId` if your account has access to multiple Atlassian sites.
 - `projects[].name` — a human label used in sync output and as the partition key in the database
@@ -150,7 +150,7 @@ On startup the config is validated; any errors are printed with the offending pa
 If you configured Jira and/or PR sync, authenticate once per provider. Then populate the local database:
 
 ```sh
-scout jira-login        # only if jira.host is set; stores OAuth tokens at <dataDir>/oauth_tokens.json
+scout jira-login        # only if jira.host is set; stores OAuth tokens at <dataDir>/jira_tokens.json
 scout github-login      # only if any project has githubRepo set; opens browser, one short code to enter on github.com/login/device
 scout bitbucket-login   # only if any project has bitbucketRepo set; prompts for Atlassian email + API token, stores at <dataDir>/bitbucket_token.json
 scout sync              # full fetch on first run
@@ -314,7 +314,7 @@ Quote multi-word queries with single quotes; wrap an exact phrase in `"…"` ins
 ## Data & privacy
 
 - The SQLite database lives at `<dataDir>/knowledge.db`. It is gitignored by default.
-- Jira OAuth tokens, if you opted into Jira, live at `<dataDir>/oauth_tokens.json` with `0600` permissions. They never appear in the config file or in `knowledge.db`. Run `scout jira-logout` to delete them.
+- Jira OAuth tokens, if you opted into Jira, live at `<dataDir>/jira_tokens.json` with `0600` permissions. They never appear in the config file or in `knowledge.db`. Run `scout jira-logout` to delete them.
 - GitHub OAuth access tokens, if you opted into GitHub PR indexing, live at `<dataDir>/github_token.json` with `0600` permissions. Run `scout github-logout` to delete them.
 - Bitbucket API tokens, if you opted into Bitbucket PR indexing, live at `<dataDir>/bitbucket_token.json` with `0600` permissions. Run `scout bitbucket-logout` to delete them.
 - The query subcommands (`search`, `history`, `related`, `status`) never make network calls. Only `sync`, `jira-login`, `github-login`, and `bitbucket-login` talk to remote services. `scout related` is Jira-only and refuses to run when Jira isn't configured.

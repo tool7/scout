@@ -160,7 +160,7 @@ Use when: confirming the index is fresh before relying on a query.
 
    Required fields: `dataDir`, `projects[].{name,gitPath}`. Optional: the entire `jira` block (with `jira.host`) and `projects[].jiraProjectKey` — set both to enable Jira indexing, omit both for a Git/code-only setup. PR indexing is optional too: set `projects[].githubRepo` (`owner/repo`) for GitHub, or `projects[].bitbucketRepo` + `bitbucketWorkspace` for Bitbucket. See `scout.config.example.json` in the repo for the full shape.
 2. **Git** on `PATH` (only needed for `sync`).
-3. **Jira login** — only required if Jira is configured. Run `scout jira-login` once; OAuth tokens land at `<dataDir>/oauth_tokens.json` and refresh automatically on subsequent `scout sync` runs.
+3. **Jira login** — only required if Jira is configured. Run `scout jira-login` once; OAuth tokens land at `<dataDir>/jira_tokens.json` and refresh automatically on subsequent `scout sync` runs.
 4. **GitHub / Bitbucket login** — required for `--source prs` when the corresponding provider is configured. Run `scout github-login` and/or `scout bitbucket-login` once; tokens land at `<dataDir>/github_token.json` / `<dataDir>/bitbucket_token.json` (`0600` permissions).
 5. **A populated `knowledge.db`** — run `scout sync` at least once.
 

@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"scout/internal/config"
-	"scout/internal/oauth"
+	"scout/internal/jiraauth"
 )
 
 func newJiraLoginCmd() *cobra.Command {
@@ -14,7 +14,7 @@ func newJiraLoginCmd() *cobra.Command {
 		Use:   "jira-login",
 		Short: "Authenticate to Jira via OAuth 2.0 (3LO) in your browser",
 		Long: "Open a browser tab so you can grant Scout read access to your Jira site.\n" +
-			"On success, OAuth tokens are saved to <dataDir>/" + oauth.TokenFileName + " and " +
+			"On success, OAuth tokens are saved to <dataDir>/" + jiraauth.TokenFileName + " and " +
 			"refreshed automatically on subsequent `scout sync` runs.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -25,12 +25,12 @@ func newJiraLoginCmd() *cobra.Command {
 			if !cfg.Jira.Configured() {
 				return fmt.Errorf("Jira is not configured. Set jira.host in scout.config.json before running jira-login.")
 			}
-			tokens, err := oauth.Login(cmd.Context(), cfg.DataDir, cfg.Jira.Host)
+			tokens, err := jiraauth.Login(cmd.Context(), cfg.DataDir, cfg.Jira.Host)
 			if err != nil {
 				return err
 			}
 			writeStdout("Logged in to " + cfg.Jira.Host + " (cloudId=" + tokens.CloudID + ")")
-			writeStdout("Token saved to " + oauth.TokenPath(cfg.DataDir))
+			writeStdout("Token saved to " + jiraauth.TokenPath(cfg.DataDir))
 			return nil
 		},
 	}
@@ -46,10 +46,10 @@ func newJiraLogoutCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := oauth.Delete(cfg.DataDir); err != nil {
+			if err := jiraauth.Delete(cfg.DataDir); err != nil {
 				return err
 			}
-			writeStdout("Removed " + oauth.TokenPath(cfg.DataDir))
+			writeStdout("Removed " + jiraauth.TokenPath(cfg.DataDir))
 			return nil
 		},
 	}

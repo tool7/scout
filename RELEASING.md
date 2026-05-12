@@ -8,7 +8,7 @@ The release pipeline is [GoReleaser](https://goreleaser.com): it builds Linux/ma
 - [ ] **GitHub token** at `~/.config/goreleaser/github_token` (`chmod 600`)
   - Fine-grained PAT with **Contents: Read and write** on both `tool7/scout` and `tool7/homebrew-tap`
 - [ ] **`tool7/homebrew-tap` reachable** with at least one commit on `main`
-- [ ] **Atlassian OAuth 2.0 (3LO) app registered** at [developer.atlassian.com](https://developer.atlassian.com/console/myapps/) — see [OAuth credentials](#oauth-credentials) below for the required scopes and callback URL. Save the resulting `client_id` and `client_secret`; they are injected into release builds via `-ldflags` and must be present in the shell environment as `SCOUT_OAUTH_CLIENT_ID` / `SCOUT_OAUTH_CLIENT_SECRET` whenever you run `goreleaser release`.
+- [ ] **Atlassian OAuth 2.0 (3LO) app registered** at [developer.atlassian.com](https://developer.atlassian.com/console/myapps/) — see [OAuth credentials](#oauth-credentials) below for the required scopes and callback URL. Save the resulting `client_id` and `client_secret`; they are injected into release builds via `-ldflags` and must be present in the shell environment as `SCOUT_JIRA_CLIENT_ID` / `SCOUT_JIRA_CLIENT_SECRET` whenever you run `goreleaser release`.
 - [ ] **GitHub OAuth App registered** at [github.com/settings/developers](https://github.com/settings/developers) — see [GitHub OAuth credentials](#github-oauth-credentials) below. Save the resulting `client_id` (Device Flow needs no secret) and supply it as `SCOUT_GITHUB_CLIENT_ID` whenever you run `goreleaser release`.
 
 ## Cut a release
@@ -25,8 +25,8 @@ The release pipeline is [GoReleaser](https://goreleaser.com): it builds Linux/ma
 3. **Export OAuth credentials.** They are read by `.goreleaser.yaml` and embedded in the binaries.
 
    ```sh
-   export SCOUT_OAUTH_CLIENT_ID="..."
-   export SCOUT_OAUTH_CLIENT_SECRET="..."
+   export SCOUT_JIRA_CLIENT_ID="..."
+   export SCOUT_JIRA_CLIENT_SECRET="..."
    export SCOUT_GITHUB_CLIENT_ID="..."
    ```
 
@@ -73,7 +73,7 @@ Scout authenticates to Jira via Atlassian OAuth 2.0 (3LO). Atlassian requires a 
   - `read:jira-user`
 
   > Note: scout also requests `offline_access` at login time so Atlassian issues a refresh token. That is a request-time OAuth scope, **not** a permission you select on the app — it does not appear in the developer-console picker, and you do not need to add it there. Leave it as-is in the source code.
-- **Callback URL**: `http://127.0.0.1:53127/callback` — Atlassian requires an **exact** match (no wildcards, no port-less host), so the CLI binds a fixed loopback port. The constant lives at `RedirectPort` in [internal/oauth/config.go](internal/oauth/config.go); if you ever change it there, update the developer-console entry in lockstep or every login will fail with `redirect_uri_mismatch`.
+- **Callback URL**: `http://127.0.0.1:53127/callback` — Atlassian requires an **exact** match (no wildcards, no port-less host), so the CLI binds a fixed loopback port. The constant lives at `RedirectPort` in [internal/jiraauth/config.go](internal/jiraauth/config.go); if you ever change it there, update the developer-console entry in lockstep or every login will fail with `redirect_uri_mismatch`.
 
 ### How they're injected at build time
 
@@ -81,8 +81,8 @@ Scout authenticates to Jira via Atlassian OAuth 2.0 (3LO). Atlassian requires a 
 
 ```yaml
 ldflags:
-  - -X scout/internal/oauth.ClientID={{.Env.SCOUT_OAUTH_CLIENT_ID}}
-  - -X scout/internal/oauth.ClientSecret={{.Env.SCOUT_OAUTH_CLIENT_SECRET}}
+  - -X scout/internal/jiraauth.ClientID={{.Env.SCOUT_JIRA_CLIENT_ID}}
+  - -X scout/internal/jiraauth.ClientSecret={{.Env.SCOUT_JIRA_CLIENT_SECRET}}
 ```
 
 A binary built **without** these vars set still compiles and works for offline query commands (`search`, `history`, `related`, `status`), but `scout jira-login` and any `scout sync` that touches Jira will fail with a clear error pointing here.
@@ -91,8 +91,8 @@ For ad-hoc local testing without GoReleaser:
 
 ```sh
 go build -ldflags "\
-  -X scout/internal/oauth.ClientID=$SCOUT_OAUTH_CLIENT_ID \
-  -X scout/internal/oauth.ClientSecret=$SCOUT_OAUTH_CLIENT_SECRET \
+  -X scout/internal/jiraauth.ClientID=$SCOUT_JIRA_CLIENT_ID \
+  -X scout/internal/jiraauth.ClientSecret=$SCOUT_JIRA_CLIENT_SECRET \
   -X scout/internal/githubauth.ClientID=$SCOUT_GITHUB_CLIENT_ID" \
   -o scout ./cmd/scout
 ```
