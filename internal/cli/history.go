@@ -144,7 +144,7 @@ func runHistory(topic, project, since string, limit int) error {
 		case event.kind == "pr" && event.pr != nil:
 			body = format.PR(*event.pr)
 		case event.ticket != nil:
-			body = format.Ticket(*event.ticket, false)
+			body = format.Ticket(*event.ticket, format.TicketCompact)
 		}
 		out += "\n\n— " + day + " —\n" + body
 	}

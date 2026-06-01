@@ -16,6 +16,7 @@ func newRelatedCmd() *cobra.Command {
 		project string
 		status  string
 		limit   int
+		full    bool
 	)
 
 	cmd := &cobra.Command{
@@ -29,18 +30,19 @@ func newRelatedCmd() *cobra.Command {
 			if err := validateRange("--limit", limit, 1, 30); err != nil {
 				return err
 			}
-			return runRelated(args[0], project, status, limit)
+			return runRelated(args[0], project, status, limit, full)
 		},
 	}
 
 	cmd.Flags().StringVarP(&project, "project", "p", "", "Only search within one Jira project")
 	cmd.Flags().StringVarP(&status, "status", "s", "all", "Filter by status: open | resolved | all")
 	cmd.Flags().IntVarP(&limit, "limit", "l", 10, "Maximum results to return (1-30)")
+	cmd.Flags().BoolVarP(&full, "full", "f", false, "Print each ticket without truncation (full description, all comments)")
 
 	return cmd
 }
 
-func runRelated(description, project, status string, limit int) error {
+func runRelated(description, project, status string, limit int, full bool) error {
 	ftsQuery := fts.ToQuery(description, fts.ModeNatural)
 	if ftsQuery == "" {
 		return emptyQueryError(description)
@@ -90,9 +92,14 @@ func runRelated(description, project, status string, limit int) error {
 	}
 	header += ":"
 
+	detail := format.TicketStandard
+	if full {
+		detail = format.TicketFull
+	}
+
 	out := header
 	for i, ticket := range tickets {
-		out += "\n\n" + strconv.Itoa(i+1) + ". " + format.Ticket(ticket, true)
+		out += "\n\n" + strconv.Itoa(i+1) + ". " + format.Ticket(ticket, detail)
 	}
 
 	writeStdout(out)

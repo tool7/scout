@@ -178,6 +178,7 @@ Full-text search across all indexed Git commits, Jira tickets, source-code files
 | `-p, --project <name>`  | —       | Restrict to a single configured project      |
 | `-s, --source <source>` | `all`   | Which source to search: `git`, `jira`, `code`, `prs`, `all` |
 | `-l, --limit <n>`       | 20      | Max results (1–50)                           |
+| `-f, --full`            | false   | Print Jira tickets in full: untruncated description, every comment |
 
 ### `scout history <topic>` — chronological narrative
 
@@ -198,6 +199,7 @@ Jira tickets most similar to a bug / behaviour description.
 | `-p, --project <name>`  | —       | Restrict to a single configured Jira project      |
 | `-s, --status <bucket>` | `all`   | `open`, `resolved`, or `all`                      |
 | `-l, --limit <n>`       | 10      | Max results (1–30)                                |
+| `-f, --full`            | false   | Print each ticket without truncation (full description, all comments) |
 
 ### `scout sync [options]` — index refresh
 
@@ -301,6 +303,9 @@ scout history 'annotations' --since 2024-01-01
 
 # "Show me only the open tickets that look like this bug."
 scout related 'PDF export issue' --status open
+
+# "Read the full body of ticket EXAMPLE-1234 — description and every comment."
+scout search 'EXAMPLE-1234' --source jira --full --limit 1
 
 # "What did reviewers say about the caching strategy?"
 scout search 'caching strategy' --source prs

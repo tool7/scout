@@ -104,7 +104,24 @@ func Commit(commit db.CommitRow) string {
 	return header + "\n" + commit.Message + bodyLine + filesLine
 }
 
-func Ticket(ticket db.TicketRow, includeComments bool) string {
+// TicketDetail controls how much of a ticket the formatter prints.
+// The three levels exist because the three callers want measurably
+// different verbosity:
+//   - Compact:  search / history results — one-liner-ish, no comments,
+//     description truncated. Keeps mixed-source result lists scannable.
+//   - Standard: related results — last 3 comments, description and
+//     each comment truncated. Enough to triage but not overwhelming.
+//   - Full:     --full flag — no truncation anywhere, every comment.
+//     For "I want to read this ticket end to end" reading mode.
+type TicketDetail int
+
+const (
+	TicketCompact TicketDetail = iota
+	TicketStandard
+	TicketFull
+)
+
+func Ticket(ticket db.TicketRow, detail TicketDetail) string {
 	typeStatus := joinNonEmpty([]string{ticket.Type, ticket.Status}, " · ")
 
 	resolution := ""
@@ -133,10 +150,14 @@ func Ticket(ticket db.TicketRow, includeComments bool) string {
 	description := strings.TrimSpace(ticket.Description)
 	descriptionLine := ""
 	if description != "" {
-		descriptionLine = "\n" + truncate(description, maxDescriptionChars)
+		if detail == TicketFull {
+			descriptionLine = "\n" + description
+		} else {
+			descriptionLine = "\n" + truncate(description, maxDescriptionChars)
+		}
 	}
 
-	if !includeComments {
+	if detail == TicketCompact {
 		return header + "\n" + summary + descriptionLine
 	}
 
@@ -145,21 +166,31 @@ func Ticket(ticket db.TicketRow, includeComments bool) string {
 		return header + "\n" + summary + descriptionLine
 	}
 
-	start := len(comments) - maxCommentsShown
-	if start < 0 {
-		start = 0
+	var shown []ticketComment
+	var commentsHeader string
+	if detail == TicketFull {
+		shown = comments
+		commentsHeader = "Comments (" + strconv.Itoa(len(comments)) + "):"
+	} else {
+		start := len(comments) - maxCommentsShown
+		if start < 0 {
+			start = 0
+		}
+		shown = comments[start:]
+		if len(comments) > maxCommentsShown {
+			commentsHeader = "Recent comments (last " + strconv.Itoa(maxCommentsShown) + " of " + strconv.Itoa(len(comments)) + "):"
+		} else {
+			commentsHeader = "Comments:"
+		}
 	}
-	latest := comments[start:]
 
-	commentLines := make([]string, 0, len(latest))
-	for _, c := range latest {
+	commentLines := make([]string, 0, len(shown))
+	for _, c := range shown {
 		body := whitespaceRun.ReplaceAllString(c.Body, " ")
-		commentLines = append(commentLines, "  - "+c.Author+" ("+isoDay(c.Created)+"): "+truncate(body, maxCommentChars))
-	}
-
-	commentsHeader := "Comments:"
-	if len(comments) > maxCommentsShown {
-		commentsHeader = "Recent comments (last " + strconv.Itoa(maxCommentsShown) + " of " + strconv.Itoa(len(comments)) + "):"
+		if detail != TicketFull {
+			body = truncate(body, maxCommentChars)
+		}
+		commentLines = append(commentLines, "  - "+c.Author+" ("+isoDay(c.Created)+"): "+body)
 	}
 
 	return header + "\n" + summary + descriptionLine + "\n" + commentsHeader + "\n" + strings.Join(commentLines, "\n")

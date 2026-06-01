@@ -35,6 +35,7 @@ Broad full-text search across all indexed Git commits, Jira tickets, source-code
 | `-p, --project <name>`   | —       | Restrict to a single configured project (use the project's `name`)   |
 | `-s, --source <source>`  | `all`   | One of: `git`, `jira`, `code`, `prs`, `all`                          |
 | `-l, --limit <n>`        | `20`    | Max results, 1–50                                                    |
+| `-f, --full`             | `false` | Render Jira tickets in full (untruncated description, every comment). No effect on non-ticket result kinds. |
 
 Notes:
 - Code search uses a **trigram tokenizer**, so substring matches work without wildcards (e.g. `parseConfig` matches `parseConfigJson`). `[code · …]` hits include a short FTS5 `snippet()` excerpt with `«match»` markers.
@@ -79,13 +80,15 @@ Jira tickets most similar to a bug or behaviour description. **Jira-only** by de
 | `-p, --project <name>`  | —       | Restrict to one Jira project                 |
 | `-s, --status <bucket>` | `all`   | One of: `open`, `resolved`, `all`            |
 | `-l, --limit <n>`       | `10`    | Max results, 1–30                            |
+| `-f, --full`            | `false` | Print each ticket without truncation: full description, every comment (not just the last 3). |
 
-Each result includes the ticket header (key, type, status, resolution, assignee, last-updated date), summary, truncated description, and the **3 most recent comments** (or all of them if there are fewer than 3).
+Each result includes the ticket header (key, type, status, resolution, assignee, last-updated date), summary, truncated description, and the **3 most recent comments** (or all of them if there are fewer than 3). Pass `--full` to disable truncation and print every comment.
 
 Examples:
 ```sh
 scout related 'PDF export drops annotations'
 scout related 'login loop on Safari' --status open
+scout related 'rate limiting on uploads' --limit 1 --full   # read the top match in full
 ```
 
 Use when: the user reports a bug or asks whether an issue has been seen before.

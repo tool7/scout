@@ -26,6 +26,7 @@ func newSearchCmd() *cobra.Command {
 		project string
 		source  string
 		limit   int
+		full    bool
 	)
 
 	cmd := &cobra.Command{
@@ -39,18 +40,19 @@ func newSearchCmd() *cobra.Command {
 			if err := validateRange("--limit", limit, 1, 50); err != nil {
 				return err
 			}
-			return runSearch(args[0], project, source, limit)
+			return runSearch(args[0], project, source, limit, full)
 		},
 	}
 
 	cmd.Flags().StringVarP(&project, "project", "p", "", "Only search within one project")
 	cmd.Flags().StringVarP(&source, "source", "s", "all", "Which source to search: git | jira | code | prs | all")
 	cmd.Flags().IntVarP(&limit, "limit", "l", 20, "Maximum results to return (1-50)")
+	cmd.Flags().BoolVarP(&full, "full", "f", false, "Print Jira tickets in full: untruncated description, every comment")
 
 	return cmd
 }
 
-func runSearch(query, project, source string, limit int) error {
+func runSearch(query, project, source string, limit int, full bool) error {
 	naturalQuery := fts.ToQuery(query, fts.ModeNatural)
 	codeQuery := fts.ToQuery(query, fts.ModeCode)
 
@@ -142,6 +144,11 @@ func runSearch(query, project, source string, limit int) error {
 	}
 	header += ":"
 
+	ticketDetail := format.TicketCompact
+	if full {
+		ticketDetail = format.TicketFull
+	}
+
 	out := header
 	for i, entry := range entries {
 		body := ""
@@ -149,7 +156,7 @@ func runSearch(query, project, source string, limit int) error {
 		case entry.kind == "commit" && entry.commit != nil:
 			body = format.Commit(*entry.commit)
 		case entry.kind == "ticket" && entry.ticket != nil:
-			body = format.Ticket(*entry.ticket, false)
+			body = format.Ticket(*entry.ticket, ticketDetail)
 		case entry.kind == "file" && entry.file != nil:
 			body = format.File(*entry.file)
 		case entry.kind == "pr" && entry.pr != nil:
